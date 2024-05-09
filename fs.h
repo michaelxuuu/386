@@ -13,7 +13,7 @@
 
 // Disk layout
 //
-// reserved (for booting) (s0) | super block (s64) | log blocks (s65) | inode blocks (s95) | bitmap block (s120) | data blocks (s121)
+// reserved (for booting) | super block | log blocks | inode blocks | bitmap block | data blocks
 
 // Fixed disk parameters
 #define BLOCKSIZE 512

@@ -1,5 +1,9 @@
-gdb: vhd
+qemu: vhd
 	qemu-system-i386 vhd -s -S &
+
+gdb: 
+	gdb -ex "target extended-remote localhost:1234" \
+	-ex "symbol-file boot.o"
 
 vhd: boot.bin
 	dd bs=1M if=/dev/zero of=$@ count=512
