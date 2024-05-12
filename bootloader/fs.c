@@ -332,5 +332,4 @@ void fs_init(const char *vhd) {
         return;
     }
     // no fs detected!
-
 }

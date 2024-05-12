@@ -88,14 +88,6 @@ union block {
     struct dirent dirents[NDIRENTS_PER_BLOCK];
 };
 
-void fs_init(const char *vhd);
-u32 alloc_inode(u16 type);
-int free_inode(u32 n);
-int read_inode(u32 n, struct dinode *p);
-int write_inode(u32 n, struct dinode *p);
-u32 inode_read(u32 n, void *buf, u32 sz, u32 off);
-u32 inode_write(u32 n, void *buf, u32 sz, u32 off);
-
 #define O_RDONLY    0x0000
 #define O_WRONLY    0x0001
 #define O_RDWR      0x0002
