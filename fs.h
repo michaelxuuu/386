@@ -13,7 +13,7 @@
 
 // Disk layout
 //
-// reserved (for booting) (s0) | super block (s64) | log blocks (s65) | inode blocks (s95) | bitmap block (s120) | data blocks (s121)
+// reserved (for booting) | super block | log blocks | inode blocks | bitmap block | data blocks
 
 // Fixed disk parameters
 #define BLOCKSIZE 512
@@ -87,14 +87,6 @@ union block {
     struct dinode inodes[NINODES_PER_BLOCK];
     struct dirent dirents[NDIRENTS_PER_BLOCK];
 };
-
-void fs_init(const char *vhd);
-u32 alloc_inode(u16 type);
-int free_inode(u32 n);
-int read_inode(u32 n, struct dinode *p);
-int write_inode(u32 n, struct dinode *p);
-u32 inode_read(u32 n, void *buf, u32 sz, u32 off);
-u32 inode_write(u32 n, void *buf, u32 sz, u32 off);
 
 #define O_RDONLY    0x0000
 #define O_WRONLY    0x0001
