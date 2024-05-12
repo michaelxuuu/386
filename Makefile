@@ -1,15 +1,3 @@
-<<<<<<< HEAD
-qemu: vhd
-	qemu-system-i386 vhd -s -S &
-
-gdb: 
-	gdb -ex "target extended-remote localhost:1234" \
-	-ex "symbol-file boot.o"
-
-vhd: boot.bin
-	dd bs=1M if=/dev/zero of=$@ count=512
-	dd bs=512 if=$< of=$@ count=1 conv=notrunc
-=======
 qemu: _qemu.1 _qemu.2
 
 _qemu.1: vhd
@@ -28,7 +16,6 @@ vhd: boot.bin test.bin
 
 test.bin: test.o
 	x86_64-elf-ld -static -Ttext 0x0 -o test.bin -e _test --oformat binary test.o
->>>>>>> 6e32ff7 (loaded test.bin (32k and is to be replaced by the bootloader's kernel binary later) at 0x10000)
 
 boot.bin: boot.o
 	x86_64-elf-ld -static -Ttext 0x0 -o boot.bin -e _start --oformat binary boot.o
