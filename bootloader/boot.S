@@ -1,6 +1,8 @@
 .global _start
 .text
 
+#include "asm.h"
+
 .code16
 _start:
 // relocate boot sector from 0x7c00 to 0x90000
@@ -60,7 +62,6 @@ go16:
     mov $2, %ah
     int $0x13
     jc die
-d:
 // read sector 64
     // set %es:%bx to 0x17c00
     mov $0x7c00, %bx
@@ -92,6 +93,7 @@ to32: // debugging symbol
     mov %cr0, %eax
     or $1, %eax
     mov %eax, %cr0
+d:
     ljmpl $8, $0x90000+go32
 .code32
 go32:
@@ -134,21 +136,8 @@ print.2:
 gdt:
 // null
     .word 0, 0, 0, 0
-// kcode
-    .word 0xffff    // limit [0, 15]
-    .word 0         // base [0, 15]
-    .byte 0         // base [16, 23]
-    .byte 0x9A      // access byte
-    .byte 0xcf      // flag: 0xc; limit [16, 20]: 0xf
-    .byte 0         // base [24, 31]
-// kdata
-    .word 0xffff
-    .word 0
-    .byte 0
-    .byte 0x92
-    .byte 0xcf
-    .byte 0
-
+    GETE(0xfffff, 0, 1)
+    GETE(0xfffff, 0, 0)
 
 gdt_ptr:
     .word gdt_ptr - gdt - 1

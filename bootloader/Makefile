@@ -10,10 +10,10 @@ boot.bin: boot.o
 	x86_64-elf-ld -static -Ttext 0x0 -o boot.bin -e _start --oformat binary boot.o -g
 
 test.o: test.S
-	x86_64-elf-as test.S -o test.o
+	x86_64-elf-gcc -c test.S -o test.o
 
 boot.o: boot.S
-	x86_64-elf-as boot.S -o boot.o
+	x86_64-elf-gcc -c boot.S -o boot.o
 
 clean:
 	rm *.o *.bin *.elf vhd
