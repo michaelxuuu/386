@@ -1,0 +1,45 @@
+set $_mode = 16
+# for internal use only
+# runs everytime the program stalls
+define hook-stop
+	# protected mode
+	if ($_mode == 32)
+		# assume never going back to real mode
+	# real mode
+    else
+		# transition into protected mode
+		# $cr0 & 0x1 is one when in protected mode
+		if ($cr0 & 1)
+			set $_mode = 32
+			# unload the target description file for the real mode
+      		unset tdesc filename
+			# print the message that we've entered the protected mode
+			printf "**********************************\n"
+			printf "*                                *\n"
+      		printf "*         Protected Mode         *\n"
+			printf "*                                *\n"
+			printf "**********************************\n"
+		# stay in real mode
+		else
+			print_instr 10
+		end
+    end
+end
+
+define print_instr
+	set $cnt = $arg0
+	# print 10 instructions starting from the one at $pc
+    x/i $pc + ($cs<<4)
+	while ($cnt > 0)
+		x/i
+		set $cnt--
+	end
+end
+
+target remote localhost:1234
+symbol-file boot.elf
+set tdesc filename ../.gdb/target.xml
+break *0x7c00
+continue
+# qemu breaks at cs:ip so we add 0x90000
+break *0x90000 + d

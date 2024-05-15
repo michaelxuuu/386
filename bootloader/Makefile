@@ -1,13 +1,13 @@
-qemu: _qemu.1 _qemu.2
+run: qemu kill
 
-_qemu.1: vhd
+qemu: vhd boot.elf
 	qemu-system-i386 vhd -s -S
 
-_qemu.2:
+kill:
 	pkill -9 qemu
 
 gdb:
-	x86_64-elf-gdb -ex "set architeture i8086" -ex "target remote localhost:1234" -ex "b *0x7c00"
+	x86_64-elf-gdb -ix "../.gdb/gdbinit"
 
 vhd: boot.bin test.bin
 	dd if=/dev/urandom of=vhd bs=1K count=32
@@ -15,10 +15,13 @@ vhd: boot.bin test.bin
 	dd bs=512 if=test.bin of=$@ seek=1 count=63 conv=notrunc
 
 test.bin: test.o
-	x86_64-elf-ld -static -Ttext 0x0 -o test.bin -e _test --oformat binary test.o
+	x86_64-elf-ld -static -Ttext 0x0 -o test.bin -e _test --oformat binary test.o -g
+
+boot.elf: boot.o
+	x86_64-elf-ld -static -Ttext 0x0 -o boot.elf -e _start boot.o -g
 
 boot.bin: boot.o
-	x86_64-elf-ld -static -Ttext 0x0 -o boot.bin -e _start --oformat binary boot.o
+	x86_64-elf-ld -static -Ttext 0x0 -o boot.bin -e _start --oformat binary boot.o -g
 
 test.o: test.S
 	x86_64-elf-as test.S -o test.o
