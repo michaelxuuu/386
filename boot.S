@@ -1,19 +1,8 @@
-.code16
 .global _start
 .text
 
+.code16
 _start:
-// set vga mode and clear screen
-    mov $0, %ah
-    mov $3, %al
-    int $0x10
-// set up stack at 0x9000
-    mov $0x9000, %sp
-    mov %sp, %bp
-// later, we will need drive id bios has saved in %dl for us
-// but before that, we will definitely use %dl for other purposes.
-// therefore, we save it on the stack
-    push %dx
 // relocate boot sector from 0x7c00 to 0x90000
     // we use "rep movsw" that repeats moving one word from %ds:%si to %es:%di %cx times
     mov $256, %cx // 512 bytes are 256 words
@@ -27,10 +16,35 @@ _start:
     xor %di, %di
     // start copying
     rep movsw
-// jump to 0x90000:.1 and start exeucting from there
+// jump to 0x90000:go16 and start exeucting from there
 // note. this requires linking the code to 0 instead of 0x7c00
-//     ljmp $0x9000, $go
-// go:
+    ljmp $0x9000, $go16
+go16:
+// disable interrupts
+    cli
+// initialize segment registers
+    mov $0x9000, %ax
+    mov %ax, %ds
+    mov %ax, %ss
+// set up stack at 0x9000
+    mov $0x9000, %sp
+    mov %sp, %bp
+// set vga mode and clear screen
+    mov $0, %ah
+    mov $3, %al
+    int $0x10
+// later, we will need drive id bios has saved in %dl for us
+// but before that, we will definitely use %dl for other purposes.
+// therefore, we save it on the stack
+    push %dx
+// set a20 line so that we'll be able to access odd megabyte addresses
+    call ibf8042
+    mov $0xd1, %al
+    out %al, $0x64
+    call ibf8042
+    mov $0xdf, %al
+    out %al, $0x60
+    call ibf8042
 // read off the bootloader kernel image from the disk
 // bootloader kernel image is assumed to start at the seocnd block and take up 32k in size
 // read sectors [2, 63]
@@ -45,7 +59,7 @@ _start:
     mov $62, %al // #sectors
     mov $2, %ah
     int $0x13
-    jc disk_err
+    jc die
 // read sector 64
     // set %es:%bx to 0x17c00
     mov $0x7e00, %bx
@@ -55,22 +69,37 @@ _start:
     mov $1, %al // #sectors
     mov $2, %ah
     int $0x13
-    jc disk_err
+    jc die
+// enter protected mode
+to32: // debugging symbol
+    lgdt gdt_ptr
+    mov %cr0, %eax
+    or $1, %eax
+    mov %eax, %cr0
+    ljmpl $8, $0x90000+go32
+.code32
+go32:
+    mov $16, %ax
+    mov %ax, %ds
+    mov %ax, %ss
+    jmp .
 
-// jump to and execute the bootloader kernel at 0x10000
-    ljmp $0x1000, $0
+// test the input buffer full (ibf) bit is set in i8042's status register
+// ibf indicates an error response from i8042 in a20 enabling sequence
+ibf8042:
+    in $0x64, %al
+    test $2, %al
+    jnz die
+    ret
 
-
-disk_err:
-    mov $disk_err_msg, %si
-    call print
+die:
     jmp .
 
 // print the string at %si
 print:
     push %si
     mov $0x0e, %ah // select bios routine (only once)
-print.0:
+print.1:
     mov (%si), %al
     // has 0 been reached?
     cmp $0, %al
@@ -79,10 +108,33 @@ print.0:
     int $0x10
     // increment pointer
     inc %si
-    jmp print.0
-print.1:
+    jmp print.1
+print.2:
     pop %si
     ret
+
+gdt:
+// null
+    .word 0, 0, 0, 0
+// kcode
+    .word 0xffff    // limit [0, 15]
+    .word 0         // base [0, 15]
+    .byte 0         // base [16, 23]
+    .byte 0x9A      // access byte
+    .byte 0xcf      // flag: 0xc; limit [16, 20]: 0xf
+    .byte 0         // base [24, 31]
+// kdata
+    .word 0xffff
+    .word 0
+    .byte 0
+    .byte 0x92
+    .byte 0xcf
+    .byte 0
+
+
+gdt_ptr:
+    .word gdt_ptr - gdt - 1
+    .long gdt+0x90000 // must add 0x90000 gdt_ptr stores the linear address of the gdt at this stage
 
 disk_err_msg:
     .string "disk error"
