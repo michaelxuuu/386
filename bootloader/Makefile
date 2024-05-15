@@ -1,18 +1,4 @@
-run: qemu kill
-
-qemu: vhd boot.elf
-	qemu-system-i386 vhd -s -S
-
-kill:
-	pkill -9 qemu
-
-gdb:
-	x86_64-elf-gdb -ix "../.gdb/gdbinit"
-
-vhd: boot.bin test.bin
-	dd if=/dev/urandom of=vhd bs=1K count=32
-	dd bs=512 if=boot.bin of=$@ count=1 conv=notrunc
-	dd bs=512 if=test.bin of=$@ seek=1 count=63 conv=notrunc
+all: test.bin boot.elf boot.bin
 
 test.bin: test.o
 	x86_64-elf-ld -static -Ttext 0x0 -o test.bin -e _test --oformat binary test.o -g
