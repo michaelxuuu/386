@@ -98,7 +98,9 @@ go32:
     mov $16, %ax
     mov %ax, %ds
     mov %ax, %ss
-    ljmpl $8, $0
+    // jump tp 0x0 where we placed the bootloader kernel
+    pushl $0
+    ret
 
 // test the input buffer full (ibf) bit is set in i8042's status register
 // ibf indicates an error response from i8042 in a20 enabling sequence
