@@ -60,9 +60,10 @@ go16:
     mov $2, %ah
     int $0x13
     jc die
+d:
 // read sector 64
     // set %es:%bx to 0x17c00
-    mov $0x7e00, %bx
+    mov $0x7c00, %bx
     mov $0, %ch // C
     mov $1, %dh // H
     mov $1, %cl // S
@@ -70,6 +71,21 @@ go16:
     mov $2, %ah
     int $0x13
     jc die
+// now we're done with bios and can overwrite its memroy!
+// move the bootloader kernel image to the zero address
+// relocate 63 sectors starting from 0x10000 to 0x0
+    push %ds
+    mov $(63 * 256), %cx
+    // %ds:%si -> 0x1000:0
+    mov $0x1000, %ax
+    mov %ax, %ds
+    xor %si, %si
+    // %ds:%si -> 0:0
+    mov $0, %ax
+    mov %ax, %es
+    xor %di, %di
+    rep movsw
+    pop %ds
 // enter protected mode
 to32: // debugging symbol
     lgdt gdt_ptr
@@ -82,7 +98,7 @@ go32:
     mov $16, %ax
     mov %ax, %ds
     mov %ax, %ss
-    jmp .
+    ljmpl $8, $0
 
 // test the input buffer full (ibf) bit is set in i8042's status register
 // ibf indicates an error response from i8042 in a20 enabling sequence

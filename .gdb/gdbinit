@@ -38,8 +38,8 @@ end
 
 target remote localhost:1234
 symbol-file boot.elf
-set tdesc filename .gdb/target.xml
+set tdesc filename ../.gdb/target.xml
 break *0x7c00
 continue
 # qemu breaks at cs:ip so we add 0x90000
-break *0x90000 + to32
+break *0x90000 + d

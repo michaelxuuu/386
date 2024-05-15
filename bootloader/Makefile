@@ -7,7 +7,7 @@ kill:
 	pkill -9 qemu
 
 gdb:
-	x86_64-elf-gdb -ix ".gdb/gdbinit"
+	x86_64-elf-gdb -ix "../.gdb/gdbinit"
 
 vhd: boot.bin test.bin
 	dd if=/dev/urandom of=vhd bs=1K count=32
