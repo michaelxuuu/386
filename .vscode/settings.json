@@ -1,9 +1,0 @@
-{
-    "files.associations": {
-        "bitset": "cpp",
-        "types.h": "c",
-        "unistd.h": "c",
-        "locale": "c",
-        "__config": "c"
-    }
-}
