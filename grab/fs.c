@@ -1,24 +1,16 @@
-/**
- * @file fs.c
- * @author 
- * @brief 
- * @version 0.1
- * @date 2024-05-03
- * 
- * @copyright Copyright (c) 2024
- * 
- */
-
-#include "../fs.h"
+#include "../kernel/fs.h"
 
 #include <assert.h>
 #include <string.h>
+
+void disk_read(int n, void *buf);
+void disk_write(int n, void *buf);
 
 struct {
     struct superblock su;   // In-memory copy of the superblock
 } fs;
 
-static u32 bitmap_alloc() 
+static u32 bitmap_alloc()
 {
     union block b;
     disk_read(fs.su.sbitmap, &b);
@@ -54,7 +46,7 @@ static int bitmap_free(u32 n)
     return 0;
 }
 
-int read_inode(u32 n, struct dinode *p) 
+static int read_inode(u32 n, struct dinode *p) 
 {
     union block b;
     // Read a inode block to the buffer
@@ -64,7 +56,7 @@ int read_inode(u32 n, struct dinode *p)
     return 0;
 }
 
-int write_inode(u32 n, struct dinode *p) 
+static int write_inode(u32 n, struct dinode *p) 
 {
     union block b;
     disk_read(fs.su.sinode + n/NINODES_PER_BLOCK, &b);
@@ -127,7 +119,7 @@ static int free_indirect(u32 n, int ilevel)
     return 0;
 }
 
-int free_inode(u32 n) 
+int free_inode(u32 n)
 {
     union block b;
     struct dinode di;
@@ -261,7 +253,6 @@ static int recursive_rw(
         disk_write(*pp, &b);
     } else
         memcpy(sa->buf, &b.bytes[start], sz);
-    mylog(sa->w ? "write block: %d\n" : "read block: %d\n", *pp);
     sa->buf += sz;
     sa->left -= sz;
     sa->off += sz;
@@ -308,7 +299,6 @@ static u32 inode_rw(u32 n, void *buf, u32 sz, u32 off, int w)
     di.size = di.size > ebyte ? di.size : ebyte; // update inode size in case it's a write operation
     if (w) {
         assert(!write_inode(n, &di)); // update inode
-        fs_checker();
     }
     return consumed;
 }
@@ -319,17 +309,4 @@ u32 inode_write(u32 n, void *buf, u32 sz, u32 off) {
 
 u32 inode_read(u32 n, void *buf, u32 sz, u32 off) {
     return inode_rw(n, buf, sz, off, 0);
-}
-
-void fs_init(const char *vhd) {
-    // Read super block
-    union block b;
-    disk_read(SUBLOCK_NUM, &b);
-    // fs detected
-    if (b.su.magic == FSMAGIC) {
-        // Save a copy of on-disk super block in memory
-        fs.su = b.su;
-        return;
-    }
-    // no fs detected!
 }

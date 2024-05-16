@@ -1,5 +1,5 @@
-#include "../fs.h"
-#include "../types.h"
+#include "../kernel/fs.h"
+#include "../kernel/types.h"
 
 #include <assert.h>
 #include <string.h>

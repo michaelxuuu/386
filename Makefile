@@ -1,6 +1,6 @@
-.PHONY: gdb _gdb qemu clean kill clean bootloader
+.PHONY: gdb _gdb qemu clean kill clean grab
 
-PATH_BOOTLOADER=./bootloader
+GRAB_PATH=./grab
 
 gdb: qemu _gdb kill
 
@@ -16,12 +16,12 @@ kill:
 
 clean:
 	rm -rf vhd *.tmp
-	make -C $(PATH_BOOTLOADER) clean
+	make -C $(GRAB_PATH) clean
 
-vhd: bootloader
+vhd: grab
 	dd if=/dev/urandom of=vhd bs=1K count=32
-	dd bs=512 if=$(PATH_BOOTLOADER)/boot.bin of=$@ count=1 conv=notrunc
-	dd bs=512 if=$(PATH_BOOTLOADER)/test.bin of=$@ seek=1 count=63 conv=notrunc
+	dd bs=512 if=$(GRAB_PATH)/boot.bin of=$@ count=1 conv=notrunc
+	dd bs=512 if=$(GRAB_PATH)/test.bin of=$@ seek=1 count=63 conv=notrunc
 
-bootloader:
-	make -C $(PATH_BOOTLOADER)
+grab:
+	make -C $(GRAB_PATH)

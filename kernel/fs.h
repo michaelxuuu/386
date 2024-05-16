@@ -1,43 +1,25 @@
-/**
- * @file fs.h
- * @author 
- * @brief 
- * @version 0.1
- * @date 2024-05-03
- * 
- * @copyright Copyright (c) 2024
- * 
- */
-
 #include "types.h"
 
-// Disk layout
+// FS layout
 //
-// reserved (for booting) | super block | log blocks | inode blocks | bitmap block | data blocks
+// super block | log blocks | inode blocks | bitmap block | data blocks
 
-// Fixed disk parameters
+// Fixed fs parameters
 #define BLOCKSIZE 512
-#define NBLOCKS_TOT 1024 // Disk size 512k
-#define NBLOCKS_RES 64   // Reserve 64 blocks (32k) for booting (MBR and bootloader)
-
-// Fixed FS paramters
 #define NBLOCKS_LOG 30
-#define SUBLOCK_NUM NBLOCKS_RES // super block starts immediately after the reserved blocks
 #define NINODES 200
 #define FSMAGIC 0xdeadbeef
 #define NULLINUM 0
 #define ROOTINUM 1 // root directory inode number
 
 struct superblock {
-    // Hardcored disk and fs parameters
     u32 ninodes;
     u32 nblock_tot;
-    u32 nblock_res;
     u32 nblock_log;
     u32 nblock_dat;
-    // Derived fs parameters
     u32 nblock_inode;
     // Start block of each disk section
+    u32 ssuper;
     u32 slog;
     u32 sinode;
     u32 sbitmap;
@@ -91,8 +73,3 @@ union block {
 #define O_RDONLY    0x0000
 #define O_WRONLY    0x0001
 #define O_RDWR      0x0002
-#define O_ACCMODE   0x0003
-
-// file abstraction layer
-
-
