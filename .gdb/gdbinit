@@ -37,7 +37,7 @@ define print_instr
 end
 
 target remote localhost:1234
-symbol-file ./grab/boot.elf
+symbol-file ./grab/stage1.elf
 set tdesc filename .gdb/target.xml
 break *0x7c00
 continue

@@ -1,20 +1,10 @@
-#include "../kernel/fs.h"
+#include "inc.h"
 
-#include <assert.h>
-#include <string.h>
-
-void disk_read(int n, void *buf);
-void disk_write(int n, void *buf);
-
-struct {
-    struct superblock su;   // In-memory copy of the superblock
-} fs;
-
-static u32 bitmap_alloc()
+static u32 bitmap_alloc() 
 {
     union block b;
-    disk_read(fs.su.sbitmap, &b);
-    for (int i = 0; i < fs.su.nblock_dat / 8; i++) {
+    disk_read(su.sbitmap, &b);
+    for (int i = 0; i < su.nblock_dat / 8; i++) {
         if (b.bytes[i] == 0xff)
             continue;
         // bytes[i] must has at least one 0 bit
@@ -22,46 +12,48 @@ static u32 bitmap_alloc()
         for (off = 0; off < 8; off++)
             if (!((b.bytes[i] >> off) & 1))
                 break;
-        if (off + i * 8 >= fs.su.nblock_dat)
+        if (off + i * 8 >= su.nblock_dat)
             return 0;
         assert(off != 8);
         b.bytes[i] |= 1 << off;
-        disk_write(fs.su.sbitmap, &b);
-        return off + i * 8 + fs.su.sdata;
+        disk_write(su.sbitmap, &b);
+        return off + i * 8 + su.sdata;
     }
     return 0;
 }
 
+
 static int bitmap_free(u32 n) 
 {
     union block b;
-    if (n < fs.su.sdata || n >= fs.su.sdata + fs.su.nblock_dat)
+    if (n < su.sdata || n >= su.sdata + su.nblock_dat)
         return -1;
-    disk_read(fs.su.sbitmap, &b);
+    disk_read(su.sbitmap, &b);
     // Double free?
     if (!(b.bytes[n/8] & (1 << (n%8))))
         return -1;
     b.bytes[n/8] &= ~(1 << (n%8));
-    disk_write(fs.su.sbitmap, &b);
+    disk_write(su.sbitmap, &b);
     return 0;
 }
 
-static int read_inode(u32 n, struct dinode *p) 
+
+int read_inode(u32 n, struct dinode *p) 
 {
     union block b;
     // Read a inode block to the buffer
-    disk_read(fs.su.sinode + n/NINODES_PER_BLOCK, &b);
+    disk_read(su.sinode + n/NINODES_PER_BLOCK, &b);
     // Read the target inode
     *p = b.inodes[n%NINODES_PER_BLOCK];
     return 0;
 }
 
-static int write_inode(u32 n, struct dinode *p) 
+int write_inode(u32 n, struct dinode *p) 
 {
     union block b;
-    disk_read(fs.su.sinode + n/NINODES_PER_BLOCK, &b);
+    disk_read(su.sinode + n/NINODES_PER_BLOCK, &b);
     b.inodes[n%NINODES_PER_BLOCK] = *p;
-    disk_write(fs.su.sinode + n/NINODES_PER_BLOCK, &b);
+    disk_write(su.sinode + n/NINODES_PER_BLOCK, &b);
     return 0;
 }
 
@@ -119,11 +111,12 @@ static int free_indirect(u32 n, int ilevel)
     return 0;
 }
 
-int free_inode(u32 n)
+// Free an inode. Also need to free all referenced data blocks.
+int free_inode(u32 n) 
 {
     union block b;
     struct dinode di;
-    if (n >= fs.su.ninodes)
+    if (n >= su.ninodes)
         return -1;
     read_inode(n, &di);
     di.type = 0;
@@ -134,17 +127,16 @@ int free_inode(u32 n)
     return 0;
 }
 
-
 u32 alloc_inode(u16 type) 
 {
     // Invalid inode type, return error
     if (type > T_DEV)
         return -1;
     // Loop through all blocks for inode
-    for (int i = 0; i < fs.su.nblock_inode; i++) {
+    for (int i = 0; i < su.nblock_inode; i++) {
         union block b;
         // Read current inode block to the buffer
-        disk_read(i + fs.su.sinode, &b);
+        disk_read(i + su.sinode, &b);
         for (int j = 0; j < NINODES_PER_BLOCK; j++) {
             // Found a unallocated inode
             if (!b.inodes[j].type) {
@@ -152,7 +144,7 @@ u32 alloc_inode(u16 type)
                 memset(p, 0, sizeof(*p));
                 p->type = type;
                 // Write back updated inode block
-                disk_write(i + fs.su.sinode, &b);
+                disk_write(i + su.sinode, &b);
                 return i * NINODES_PER_BLOCK + j;
             }
         }
@@ -266,7 +258,7 @@ static u32 inode_rw(u32 n, void *buf, u32 sz, u32 off, int w)
     u32 sbyte = off;
     u32 ebyte = off + sz;
     // Invalid inode number
-    if (n >= fs.su.ninodes)
+    if (n >= su.ninodes)
         return -1;
     // Read inode structure
     if (read_inode(n, &di))
@@ -297,9 +289,8 @@ static u32 inode_rw(u32 n, void *buf, u32 sz, u32 off, int w)
                             // indicating that the required amount of bytes has been successfully 
                             // consumed from buf (write) or from disk (read)
     di.size = di.size > ebyte ? di.size : ebyte; // update inode size in case it's a write operation
-    if (w) {
+    if (w)
         assert(!write_inode(n, &di)); // update inode
-    }
     return consumed;
 }
 
