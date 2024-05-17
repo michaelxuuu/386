@@ -1,6 +1,6 @@
 #include "inc.h"
 
-static u32 bitmap_alloc() 
+static uint32_t bitmap_alloc() 
 {
     union block b;
     disk_read(su.sbitmap, &b);
@@ -23,7 +23,7 @@ static u32 bitmap_alloc()
 }
 
 
-static int bitmap_free(u32 n) 
+static int bitmap_free(uint32_t n) 
 {
     union block b;
     if (n < su.sdata || n >= su.sdata + su.nblock_dat)
@@ -38,7 +38,7 @@ static int bitmap_free(u32 n)
 }
 
 
-int read_inode(u32 n, struct dinode *p) 
+int read_inode(uint32_t n, struct dinode *p) 
 {
     union block b;
     // Read a inode block to the buffer
@@ -48,7 +48,7 @@ int read_inode(u32 n, struct dinode *p)
     return 0;
 }
 
-int write_inode(u32 n, struct dinode *p) 
+int write_inode(uint32_t n, struct dinode *p) 
 {
     union block b;
     disk_read(su.sinode + n/NINODES_PER_BLOCK, &b);
@@ -89,7 +89,7 @@ static int get_ilevel(int ptr_idx)
 // frees all sub-level blocks based on the ilevel value. For example, an initial
 // call with ilevel=2 for a doubly-indirect block will recursively free all
 // singly-indirect blocks and their respective data blocks.
-static int free_indirect(u32 n, int ilevel) 
+static int free_indirect(uint32_t n, int ilevel) 
 {
     // ilevel=0 is the base case: it is a data block
     if (!ilevel) {
@@ -112,7 +112,7 @@ static int free_indirect(u32 n, int ilevel)
 }
 
 // Free an inode. Also need to free all referenced data blocks.
-int free_inode(u32 n) 
+int free_inode(uint32_t n) 
 {
     union block b;
     struct dinode di;
@@ -127,7 +127,7 @@ int free_inode(u32 n)
     return 0;
 }
 
-u32 alloc_inode(u16 type) 
+uint32_t alloc_inode(uint16_t type) 
 {
     // Invalid inode type, return error
     if (type > T_DEV)
@@ -160,27 +160,27 @@ u32 alloc_inode(u16 type)
 // generated from a single call to inode_rw(), while each recursive_rw() 
 // call has their own private copies of the other two arguments.
 struct share_arg {
-    u32 boff;   // Current block offset within a file
-    u32 sblock; // Start block
-    u32 eblock; // End block
+    uint32_t boff;   // Current block offset within a file
+    uint32_t sblock; // Start block
+    uint32_t eblock; // End block
     // Note: For each block pointed to by pp, we test if the data block it covers
     // or itself if it is a data block (*boff + nblocks linked to it) overlaps with 
     // the [sblock, eblock] interval, and we skip this block if not.
-    u32 off;    // Same off in inode_rw()
+    uint32_t off;    // Same off in inode_rw()
     char *buf;  // Same buf in inode_rw()
-    u32 left;   // Number of bytes left
+    uint32_t left;   // Number of bytes left
     int w;      // Recursive write? Recursive read if 0
 };
 
 static int recursive_rw(
-    u32 *pp,    // Pointer to a block pointer (which could be in an inode or an indirect pointer that caller traverses)
-    u32 ilevel, // Recursion level. 0 means we've reached a data block.
+    uint32_t *pp,    // Pointer to a block pointer (which could be in an inode or an indirect pointer that caller traverses)
+    uint32_t ilevel, // Recursion level. 0 means we've reached a data block.
     struct share_arg *sa
 ) {
     // Do we skip this indirect block?
     // Compute data *block coverage* of this indirect (or data) block: [sblock, eblock)
-    u32 sblock = sa->boff;
-    u32 eblock = sa->boff;
+    uint32_t sblock = sa->boff;
+    uint32_t eblock = sa->boff;
     if (ilevel == 0)
         eblock += 1;
     if (ilevel == 1)
@@ -208,7 +208,7 @@ static int recursive_rw(
     } else {
         // Handle reading sparse files
         if (!*pp) {
-            u32 sz = (eblock - sblock) * BLOCKSIZE;
+            uint32_t sz = (eblock - sblock) * BLOCKSIZE;
             if (sa->left < sz)
                 sz = sa->left;
             memset(sa->buf, 0, sz);
@@ -237,8 +237,8 @@ static int recursive_rw(
         return 0;
     }
     // It's a data block.
-    u32 start = sa->off % BLOCKSIZE;
-    u32 sz = sa->left < (BLOCKSIZE - start) ? sa->left : (BLOCKSIZE - start);
+    uint32_t start = sa->off % BLOCKSIZE;
+    uint32_t sz = sa->left < (BLOCKSIZE - start) ? sa->left : (BLOCKSIZE - start);
     disk_read(*pp, &b);
     if (sa->w) {
         memcpy(&b.bytes[start], sa->buf, sz);
@@ -252,11 +252,11 @@ static int recursive_rw(
     return 0;
 }
 
-static u32 inode_rw(u32 n, void *buf, u32 sz, u32 off, int w)
+static uint32_t inode_rw(uint32_t n, void *buf, uint32_t sz, uint32_t off, int w)
 {
     struct dinode di;
-    u32 sbyte = off;
-    u32 ebyte = off + sz;
+    uint32_t sbyte = off;
+    uint32_t ebyte = off + sz;
     // Invalid inode number
     if (n >= su.ninodes)
         return -1;
@@ -269,8 +269,8 @@ static u32 inode_rw(u32 n, void *buf, u32 sz, u32 off, int w)
         ebyte = di.size;
         sz = di.size - sbyte;
     }
-    u32 sblock = sbyte/BLOCKSIZE;
-    u32 eblock = ebyte/BLOCKSIZE;
+    uint32_t sblock = sbyte/BLOCKSIZE;
+    uint32_t eblock = ebyte/BLOCKSIZE;
     struct share_arg *sa = &(struct share_arg){
         .boff = 0,
         .sblock = sblock,
@@ -284,7 +284,7 @@ static u32 inode_rw(u32 n, void *buf, u32 sz, u32 off, int w)
     for (int i = 0; i < NPTRS; i++)
         if (recursive_rw(&di.ptrs[i], get_ilevel(i), sa))
             break;
-    u32 consumed = sz - sa->left;
+    uint32_t consumed = sz - sa->left;
     ebyte = off + consumed; // ebyte should remain unchanged if consumed equals sz, 
                             // indicating that the required amount of bytes has been successfully 
                             // consumed from buf (write) or from disk (read)
@@ -294,10 +294,10 @@ static u32 inode_rw(u32 n, void *buf, u32 sz, u32 off, int w)
     return consumed;
 }
 
-u32 inode_write(u32 n, void *buf, u32 sz, u32 off) {
+uint32_t inode_write(uint32_t n, void *buf, uint32_t sz, uint32_t off) {
     return inode_rw(n, buf, sz, off, 1);
 }
 
-u32 inode_read(u32 n, void *buf, u32 sz, u32 off) {
+uint32_t inode_read(uint32_t n, void *buf, uint32_t sz, uint32_t off) {
     return inode_rw(n, buf, sz, off, 0);
 }

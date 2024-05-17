@@ -4,22 +4,22 @@
 #include "inc.h"
 
 struct filestat {
-    u16 type;
-    u32 size;
-    u16 linkcnt;
+    uint16_t type;
+    uint32_t size;
+    uint16_t linkcnt;
 };
 
 // Open file structure
 struct file {
-    u32 off;
-    u32 inum;
-    u32 mode;
+    uint32_t off;
+    uint32_t inum;
+    uint32_t mode;
 };
 
 // Open files
 static struct file files[NFILES];
 
-int fileopen(char *path, u16 mode) {
+int fileopen(char *path, uint16_t mode) {
     for (int i = 0; i < NFILES; i++) {
         if (files[i].inum == NULLINUM) {
             int inum = fs_lookup(path, 0);
@@ -34,7 +34,7 @@ int fileopen(char *path, u16 mode) {
     return -1;
 }
 
-int fileseek(int fd, u32 off) {
+int fileseek(int fd, uint32_t off) {
     if (files[fd].inum == NULLINUM)
         return -1;
     files[fd].off = off;
@@ -44,7 +44,7 @@ int fileseek(int fd, u32 off) {
 int filewrite(int fd, void *buf, int sz) {
     if (!files[fd].inum || !files[fd].mode)
         return -1;
-    u32 n = inode_write(files[fd].inum, buf, sz, files[fd].off);
+    uint32_t n = inode_write(files[fd].inum, buf, sz, files[fd].off);
     files[fd].off += n;
     return n;
 }
@@ -52,7 +52,7 @@ int filewrite(int fd, void *buf, int sz) {
 int fileread(int fd, void *buf, int sz) {
     if (!files[fd].inum || files[fd].mode & O_WRONLY)
         return -1;
-    u32 n = inode_read(files[fd].inum, buf, sz, files[fd].off);
+    uint32_t n = inode_read(files[fd].inum, buf, sz, files[fd].off);
     files[fd].off += n;
     return n;
 }

@@ -1,6 +1,3 @@
-#include "../kernel/fs.h"
-#include "../partition/partition.h"
-
 #include <stdio.h>
 #include <fcntl.h>
 #include <ctype.h>
@@ -8,6 +5,10 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <assert.h>
+#include <stdint.h>
+
+#include "../kernel/fs.h"
+#include "../partition/partition.h"
 
 int fd;
 
@@ -43,13 +44,13 @@ int main(int argc, char *argv[]) {
     }
     --n;
     disk_read(0, &b); // Read the first sector
-    if (!ismbr(&b)) { // Check if the first sector is the mbr from whom we need the partition table
+    if (*(uint16_t *)&b.bytes[510] != 0xaa55) { // Check if the first sector is the mbr from whom we need the partition table
         fprintf(stderr, "missing MBR\n");
         exit(1);
     }
     // Obtain partition table from the mbr read
-    struct par partble[4];
-    struct par *p = getpar(&b, 0);
+    struct partition partble[4];
+    struct partition *p = (struct partition *)(&b.bytes[512] - 2 - sizeof(struct partition) * 4);
     for (int i = 0; i < 4; partble[i++] = *p++);
     if (!partble[n].sysid) {// Is the specified partition used?
         fprintf(stderr, "partition %d is empty", n + 1);
@@ -82,7 +83,7 @@ int main(int argc, char *argv[]) {
     // Mark the specified partition as bootable
     partble[n].bootable = 0x80;
     // Copy the partition table
-    p = getpar((union block *)buf, 0);
+    p = (struct partition *)(&buf[512] - 2 - sizeof(struct partition) * 4);
     for (int i = 0; i < 4; *p++ = partble[i++]);
     disk_write(0, buf);
     close(fd);

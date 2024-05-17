@@ -1,6 +1,3 @@
-#include "../kernel/fs.h"
-#include "../fs/export.h"
-
 #include <time.h>
 #include <fcntl.h>
 #include <stdio.h>
@@ -9,8 +6,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+#include <stdint.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
+
+#include "../kernel/fs.h"
+#include "../fs/export.h"
 
 int vhd_fd;
 
@@ -153,7 +154,7 @@ static void cmd_stat(char *path) {
     printf("type:%d\nsize:%d\nlinkcnt:%d\n", st.type, st.size, st.linkcnt);
 }
 
-static void cmd_write(char *path, u32 off, u32 sz, char *words) {
+static void cmd_write(char *path, uint32_t off, uint32_t sz, char *words) {
     int fd;
     if ((fd = fileopen(path, O_WRONLY)) < 0) {
         fprintf(stderr, "fileopen failed\n");
@@ -164,7 +165,7 @@ static void cmd_write(char *path, u32 off, u32 sz, char *words) {
     assert(fileclose(fd) >= 0);
 }
 
-static void cmd_read(char *path, u32 off, u32 sz) {
+static void cmd_read(char *path, uint32_t off, uint32_t sz) {
     int fd;
     if ((fd = fileopen(path, O_RDONLY)) < 0) {
         fprintf(stderr, "fileopen failed\n");

@@ -5,14 +5,14 @@ struct superblock su;
 // Look up 'name' under the directory pointed to by 'inum.'
 // Return the inum of the dirent containing 'name' if found and NULLINUM (0) otherwise.
 // Write the offset of the dirent found into *poff if it's not NULL.
-u32 dir_lookup(u32 inum, char *name, u32 *poff)
+uint32_t dir_lookup(uint32_t inum, char *name, uint32_t *poff)
 {
     struct dinode di;
     read_inode(inum, &di);
     // Not a directory
     if (di.type != T_DIR)
         return NULLINUM;
-    u32 off = 0;
+    uint32_t off = 0;
     for (int i = 0; i < di.size / sizeof(struct dirent); 
         i++, off += sizeof(struct dirent)) {
         struct dirent de;
@@ -28,7 +28,7 @@ u32 dir_lookup(u32 inum, char *name, u32 *poff)
 
 // Find the inode corresponds to the given path.
 // If parent = 1, stop one level early at the parent dir.
-u32 fs_lookup(char *path, int parent) {
+uint32_t fs_lookup(char *path, int parent) {
     if (!path)
         return NULLINUM;
     int l = strnlen(path, MAXPATH);
@@ -38,7 +38,7 @@ u32 fs_lookup(char *path, int parent) {
     // restricting path must be preceeded by '/'
     if (path[0] != '/')
         return NULLINUM;
-    u32 inum = ROOTINUM; // start from root
+    uint32_t inum = ROOTINUM; // start from root
     path += 1; // skip the leading slash
     for (;;) {
         if (!*path)
@@ -70,11 +70,11 @@ int fs_init(int n) {
     union block b;
     n--; // Convert to 0-based indexing
     disk_read(0, &b); // Read the first sector
-    if (!ismbr(&b)) // Check if the first sector is the mbr from whom we need the partition table
+    if (*(uint16_t *)&b.bytes[510] != 0xaa55) // Check if the first sector is the mbr from whom we need the partition table
         return -1;
     // Obtain partition table from the mbr read
-    struct par partble[4];
-    struct par *p = (struct par *)(&b.bytes[512] - 2 - sizeof(struct par) * 4);
+    struct partition partble[4];
+    struct partition *p = (struct partition *)(&b.bytes[512] - 2 - sizeof(struct partition) * 4);
     for (int i = 0; i < 4; partble[i++] = *p++);
     if (!partble[n].sysid) // Is the specified partition used?
         return -1;
@@ -115,8 +115,8 @@ int fs_init(int n) {
 
 // path = parent(dir)/name
 // Create an inode and link it under "parent" with "name"
-int fs_mknode(char *path, u16 type) {
-    u32 n;
+int fs_mknode(char *path, uint16_t type) {
+    uint32_t n;
     char parent[MAXPATH];
     char name[MAXNAME];
     struct dinode di;
@@ -160,9 +160,9 @@ int fs_mknode(char *path, u16 type) {
 // the link count of the corresponding inode and free it
 // if the link count reaches to 0.
 int fs_unlink(char *path) {
-    u32 n;
-    u32 nn;
-    u32 off;
+    uint32_t n;
+    uint32_t nn;
+    uint32_t off;
     struct dinode di;
     struct dirent de;
     char name[MAXNAME];
@@ -203,9 +203,9 @@ int fs_unlink(char *path) {
 // Given old_parent/dirent{old_name, inum},
 // create new_parent/dirent{new_name, inum}
 int fs_link(char *new, char *old) {
-    u32 n;
-    u32 nn;
-    u32 off;
+    uint32_t n;
+    uint32_t nn;
+    uint32_t off;
     struct dinode di;
     struct dirent de;
     char name[MAXNAME];
