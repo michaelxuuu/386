@@ -1,6 +1,8 @@
 #ifndef _fs_h_
 #define _fs_h_
 
+#include <stdint.h>
+
 // FS layout
 //
 // super block | log blocks | inode blocks | bitmap block | data blocks
@@ -13,18 +15,26 @@
 #define NULLINUM 0
 #define ROOTINUM 1 // root directory inode number
 
+// Each file system is in charge of a disk partition
+// and the super block structure describe the whole
+// file system layout. Therefore, it's important to
+// realize that the file system can start almost anywhere
+// in the perspective of the whole disk just like a partition
+// can be formed almost anywhere in a disk.
 struct superblock {
+    // Start block of the file system in the disk
+    uint32_t start;
     uint32_t ninodes;
     uint32_t nblock_tot;
     uint32_t nblock_log;
     uint32_t nblock_dat;
     uint32_t nblock_inode;
-    // Start block of each disk section
-    uint32_t ssuper;
+    // Start block of each file system section
     uint32_t slog;
     uint32_t sinode;
     uint32_t sbitmap;
     uint32_t sdata;
+    // Magic number
     uint32_t magic;
 };
 
@@ -70,9 +80,5 @@ union block {
     struct dinode inodes[NINODES_PER_BLOCK];
     struct dirent dirents[NDIRENTS_PER_BLOCK];
 };
-
-#define O_RDONLY    0x0000
-#define O_WRONLY    0x0001
-#define O_RDWR      0x0002
 
 #endif

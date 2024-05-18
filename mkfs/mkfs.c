@@ -11,20 +11,23 @@
 #include <sys/wait.h>
 
 #include "../kernel/fs.h"
-#include "../fs/export.h"
+#include "../partition/partition.h"
+#include "../fs/inc.h"
 
-int vhd_fd;
+struct {
+    int fd;
+} mkfs;
 
-void disk_write(int n, void *buf)
+static void disk_write(int n, void *buf)
 {
-    assert(lseek(vhd_fd, n * BLOCKSIZE, SEEK_SET) == n * BLOCKSIZE);
-    assert(write(vhd_fd, buf, BLOCKSIZE) == BLOCKSIZE);
+    assert(lseek(mkfs.fd, n * BLOCKSIZE, SEEK_SET) == n * BLOCKSIZE);
+    assert(write(mkfs.fd, buf, BLOCKSIZE) == BLOCKSIZE);
 }
 
-void disk_read(int n, void *buf)
+static void disk_read(int n, void *buf)
 {
-    assert(lseek(vhd_fd, n * BLOCKSIZE, SEEK_SET) == n * BLOCKSIZE);
-    assert(read(vhd_fd, buf, BLOCKSIZE) == BLOCKSIZE);
+    assert(lseek(mkfs.fd, n * BLOCKSIZE, SEEK_SET) == n * BLOCKSIZE);
+    assert(read(mkfs.fd, buf, BLOCKSIZE) == BLOCKSIZE);
 }
 
 static int arg_len(char *arg) {
@@ -65,120 +68,96 @@ static int parse_args(char *buf, char *args[], int argct) {
 }
 
 static void cmd_ls(char *path) {
-    int fd;
+    uint32_t inum;
+    uint32_t off = 0;
     if (!path)
         return;
-    if ((fd = fileopen(path, O_RDONLY)) == -1) {
-        fprintf(stderr, "fileopen failed\n");
+    if ((inum = fs_lookup(path, 0)) == NULLINUM)
         return;
-    }
     struct dirent de;
-    while (fileread(fd, &de, sizeof de)) {
+    while (inode_read(inum, &de, sizeof de, off)) {
         if (!de.inum)
             continue;
         printf("%s\n", de.name);
+        off += sizeof de;
     }
-    assert(!fileclose(fd));
 }
 
 static void cmd_mkdir(char *path) {
-    if (fs_mknode(path, T_DIR)) {
-        fprintf(stderr, "filemkdir failed\n");
-        return;
-    }
+    fs_mknod(path, T_DIR);
 }
 
 static void cmd_migrate(char *mypath, char *hostpath) {
     int hostfd = open(hostpath, O_RDONLY, 0644);
     if (hostfd < 0) {
-        fprintf(stderr, "%s not found in host fs\n", hostpath);
+        perror("host open");
         return;
     }
-    int myfd;
-    if (fs_mknode(mypath, T_REG)) {
-        fprintf(stderr, "failed to create %s in myfs\n", mypath);
+    if (fs_mknod(mypath, T_REG))
         return;
-    }
-    assert((myfd = fileopen(mypath, O_WRONLY)) >= 0);
     char c;
+    uint32_t inum;
+    uint32_t off = 0;
+    assert((inum = fs_lookup(mypath, 0)) != NULLINUM);
     for (;;) {
         int n;
         assert((n = read(hostfd, &c, 1)) >= 0);
         if (!n)
             break;
-        assert(filewrite(myfd, &c, 1));
+        assert(inode_write(inum, &c, 1, off++) == 1);
     }
     assert(close(hostfd) >= 0);
-    assert(fileclose(myfd) >= 0);
 }
 
 static void cmd_retrieve(char *hostpath, char *mypath) {
     int hostfd = open(hostpath, O_CREAT | O_TRUNC | O_WRONLY , 0644);
-    int myfd = fileopen(mypath, O_RDONLY);
-    if (hostfd < 0) {
-        perror("host open");
+    uint32_t inum;
+    if ((inum = fs_lookup(mypath, 0)) == NULLINUM)
         return;
-    }
-    if (myfd < 0) {
-        fprintf(stderr, "%s not found in myfs\n", mypath);
-        close(hostfd);
+    if (hostfd < 0) {
+        perror("open");
         return;
     }
     char c;
+    uint32_t off = 0;
     for (;;) {
         int n;
-        assert((n = fileread(myfd, &c, 1)) >= 0);
+        assert((n = inode_read(inum, &c, 1, off++)) >= 0);
         if (!n)
             break;
         assert(write(hostfd, &c, 1));
     }
     assert(close(hostfd) >= 0);
-    assert(fileclose(myfd) >= 0);
 }
 
 static void cmd_touch(char *path) {
-    if (fs_mknode(path, T_REG)) {
-        fprintf(stderr, "fs_mknode failed\n");
-        return;
-    }
+    fs_mknod(path, T_REG);
 }
 
 static void cmd_stat(char *path) {
-    int fd;
-    if ((fd = fileopen(path, O_WRONLY)) < 0) {
-        fprintf(stderr, "fileopen failed\n");
+    uint32_t inum;
+    if ((inum = fs_lookup(path, 0)) == NULLINUM)
         return;
-    }
-    struct filestat st;
-    assert(filestat(fd, &st) >= 0);
-    printf("type:%d\nsize:%d\nlinkcnt:%d\n", st.type, st.size, st.linkcnt);
+    struct dinode di;
+    read_inode(inum, &di);
+    printf("linkcnt:%u major:%u minor:%u size:%u type:%u\n", di.linkcnt, di.major, di.minor, di.size, di.type);
 }
 
-static void cmd_write(char *path, uint32_t off, uint32_t sz, char *words) {
-    int fd;
-    if ((fd = fileopen(path, O_WRONLY)) < 0) {
-        fprintf(stderr, "fileopen failed\n");
+static void cmd_write(char *path, uint32_t off, char *s) {
+    uint32_t inum;
+    if ((inum = fs_lookup(path, 0)) == NULLINUM)
         return;
-    }
-    assert(fileseek(fd, off) >= 0);
-    assert(filewrite(fd, words, strlen(words)) == strlen(words));
-    assert(fileclose(fd) >= 0);
+    assert(inode_write(inum, s, strlen(s), off) == strlen(s));
 }
 
 static void cmd_read(char *path, uint32_t off, uint32_t sz) {
-    int fd;
-    if ((fd = fileopen(path, O_RDONLY)) < 0) {
-        fprintf(stderr, "fileopen failed\n");
+    uint32_t inum;
+    if ((inum = fs_lookup(path, 0)) == NULLINUM)
         return;
-    }
     char buf[BLOCKSIZE];
-    assert(fileseek(fd, off) >= 0);
-    int n = fileread(fd, buf, sz);
-    if (n < 0) {
-        printf("fileread failed\n");
-        assert(fileclose(fd) >= 0);
+    uint32_t n = inode_read(inum, buf, sz, off);
+    if (n != (uint32_t)-1)
         return;
-    }
     for (int i = 0; i < n; i++) {
         if (isprint(buf[i]))
             printf("%c", buf[i]);
@@ -188,10 +167,7 @@ static void cmd_read(char *path, uint32_t off, uint32_t sz) {
             printf("\\?");
     }
     puts("");
-    assert(fileclose(fd) >= 0);
 }
-
-int fs_init(int partition_num);
 
 #define CMDLEN 32
 int main(int argc, char *argv[]) 
@@ -201,22 +177,38 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
-    if ((vhd_fd = open(argv[1], O_RDWR)) < 0) {
+    if ((mkfs.fd = open(argv[1], O_RDWR)) < 0) {
         perror("open");
         exit(1);
     }
 
     int n = atoi(argv[2]);
-    if (strlen(argv[2]) != 1 || 
-        !isnumber(argv[2][0]) ||
-        n < 1 ||
-        n > 4) {
+    if (strlen(argv[2]) != 1 || !isnumber(argv[2][0]) || n < 1 || n > 4) {
         fprintf(stderr, "invalid partition number\n");
         exit(1);
     }
 
-    fs_init(n);
-
+    union block b;
+    // Read the first sector and assume it's the mbr
+    disk_read(0, &b);
+    if (*(uint16_t *)&b.bytes[510] != 0xaa55) {
+        fprintf(stderr, "missing MBR\n");
+        exit(1);
+    }
+    // Retrieve the partition table from the mbr
+    struct partition partble[4];
+    struct partition *p = (struct partition *)(&b.bytes[512] - 2 - sizeof(struct partition) * 4);
+    for (int i = 0; i < 4; partble[i++] = *p++);
+    // Does the specified partition number 'n' points to a valid partition with a non-zero 'sysid'
+    if (!partble[n - 1].sysid) {
+        fprintf(stderr, "partition %d is empty", n);
+        exit(1);
+    }
+    
+    if (fs_init(&partble[n - 1], disk_read, disk_write, printf) < 0) {
+        fs_format(&partble[n - 1]);
+        assert(fs_init(&partble[n - 1], disk_read, disk_write, printf) >= 0);
+    }
     for (;;) {
         char cmd[CMDLEN];
         printf("> "), fflush(stdout);
@@ -252,10 +244,10 @@ int main(int argc, char *argv[])
             else
                 cmd_read(args[1], atoi(args[2]), atoi(args[3]));
         } if (!strncmp(args[0], "write", 5)) {
-            if (cnt < 5)
-                fprintf(stdout, "write: write <path> <off> <size> <words>\n");
+            if (cnt < 4)
+                fprintf(stdout, "write: write <path> <off> <word>\n");
             else
-                cmd_write(args[1], atoi(args[2]), atoi(args[3]), args[4]);
+                cmd_write(args[1], atoi(args[2]), args[3]);
         } if (!strncmp(args[0], "stat", 4)) {
             if (cnt < 2)
                 fprintf(stdout, "stat: stat <path>\n");

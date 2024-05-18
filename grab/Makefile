@@ -1,5 +1,4 @@
-grab: grab.c stage1.bin stage2.bin stage1.elf
-	gcc $< -o $@
+grab: stage1.bin stage2.bin stage1.elf
 
 stage2.bin: stage2.o
 	x86_64-elf-ld -static -Ttext 0x0 -o stage2.bin -e _test --oformat binary stage2.o -g
@@ -17,4 +16,4 @@ stage1.o: stage1.S
 	x86_64-elf-gcc -c stage1.S -o stage1.o
 
 clean:
-	-rm *.o *.bin *.elf vhd grab
+	-rm *.o *.bin *.elf vhd
