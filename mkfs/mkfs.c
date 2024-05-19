@@ -14,9 +14,17 @@
 #include "../partition/partition.h"
 #include "../fs/inc.h"
 
+#define min(x, y) (x < y ? x : y)
+#define max(x, y) (x > y ? x : y)
+
 struct {
     int fd;
 } mkfs;
+
+static void panic(char *s) {
+    printf("%s", s);
+    for(;;);
+}
 
 static void disk_write(int n, void *buf)
 {
@@ -30,146 +38,177 @@ static void disk_read(int n, void *buf)
     assert(read(mkfs.fd, buf, BLOCKSIZE) == BLOCKSIZE);
 }
 
-static int arg_len(char *arg) {
-    for (int i = 0; ; i++)
-        if (!arg[i] || arg[i] == ' ')
-            return i;
-}
-
-static char *get_arg(char *buf, int n) {
-    int nn = 0, s = 0;
-    for (int i = 0; buf[i]; i++) {
-        // Start of an arg
-        if (buf[i] != ' ' && !s) {
-            if (nn++ == n)
-                return &buf[i];
-            s = !s;
-        }
-        // Start of spaces
-        if (buf[i] == ' ' && s)
-            s = !s;
-    }
-    return 0;
-}
-
-static int parse_args(char *buf, char *args[], int argct) {
+// Find the next word in a null-terminated string.
+// Return a null pointer when there are no more words left.
+// Return a pointer to the char after the current word.
+// To get all the words in a string, keep calling this function
+// in a loop and use the return of the previous call as the 's'
+// argument of the next call until 0 is returned.
+static char *nextword(char *s, char word[]) {
+    for (; *s && isspace(*s); s++);
+    if (!*s)
+        return 0;
     int i = 0;
-    int cnt = 0;
-    // Get 'argct' args or fewer if not as many
-    for (; i < argct; i++)
-        if (!(args[i] = get_arg(buf, i)))
-            break;
-    cnt = i;
-    // Null-terminate the args in buf[].
-    // Do this after since nulling buf elements interferes get_arg()
-    for (i-- ; i >= 0; i--)
-        args[i][arg_len(args[i])] = 0;
-    return cnt;
+    for (; *s && !isspace(*s); s++, i++)
+        word[i] = *s;
+    word[i] = 0;
+    return s;
 }
 
-static void cmd_ls(char *path) {
-    uint32_t inum;
-    uint32_t off = 0;
-    if (!path)
-        return;
-    if ((inum = fs_lookup(path, 0)) == NULLINUM)
-        return;
-    struct dirent de;
-    while (inode_read(inum, &de, sizeof de, off)) {
-        if (!de.inum)
-            continue;
-        printf("%s\n", de.name);
-        off += sizeof de;
-    }
-}
-
-static void cmd_mkdir(char *path) {
-    fs_mknod(path, T_DIR);
-}
-
-static void cmd_migrate(char *mypath, char *hostpath) {
-    int hostfd = open(hostpath, O_RDONLY, 0644);
-    if (hostfd < 0) {
-        perror("host open");
+void do_ls(char *s) {
+    char path[64];
+    if (!nextword(s, path)) {
+        printf("usage: ls <path>");
         return;
     }
-    if (fs_mknod(mypath, T_REG))
+    uint32_t inum = fs_lookup(path);
+    if (inum == NULLINUM) {
+        printf("ls: %s: No such file or directory\n", path);
         return;
-    char c;
-    uint32_t inum;
+    }
     uint32_t off = 0;
-    assert((inum = fs_lookup(mypath, 0)) != NULLINUM);
     for (;;) {
-        int n;
-        assert((n = read(hostfd, &c, 1)) >= 0);
+        struct dirent d;
+        uint32_t n = inode_read(inum, &d, sizeof d, off);
         if (!n)
             break;
-        assert(inode_write(inum, &c, 1, off++) == 1);
+        if (d.inum)
+            printf("%s\n", d.name);
+        off += sizeof d;
     }
-    assert(close(hostfd) >= 0);
 }
 
-static void cmd_retrieve(char *hostpath, char *mypath) {
-    int hostfd = open(hostpath, O_CREAT | O_TRUNC | O_WRONLY , 0644);
-    uint32_t inum;
-    if ((inum = fs_lookup(mypath, 0)) == NULLINUM)
+void do_migrate(char *s) {
+    char paths[2][64];
+    for (int i = 0; i < 2; i++) {
+        if (!(s = nextword(s, paths[i]))) {
+            printf("usage: migrate <host_path> <path>\n");
+            return;
+        }
+    }
+    uint32_t inum = fs_lookup(paths[1]);
+    if (inum != NULLINUM) {
+        printf("migrate: %s: File exists\n", paths[1]);
         return;
-    if (hostfd < 0) {
+    }
+    inum = fs_mknod(paths[1], T_REG);
+    if (inum == NULLINUM)
+        panic("fs error");
+    int fd = open(paths[0], O_RDWR);
+    if (fd < 0) {
         perror("open");
         return;
     }
-    char c;
     uint32_t off = 0;
     for (;;) {
-        int n;
-        assert((n = inode_read(inum, &c, 1, off++)) >= 0);
+        char c;
+        int n = read(fd, &c, 1);
         if (!n)
             break;
-        assert(write(hostfd, &c, 1));
+        int nn = inode_write(inum, &c, 1, off++);
+        if (nn != 1)
+            panic("fs error!");
     }
-    assert(close(hostfd) >= 0);
+    close(fd);
 }
 
-static void cmd_touch(char *path) {
-    fs_mknod(path, T_REG);
+void do_retrieve(char *s) {
+    char paths[2][64];
+    for (int i = 0; i < 2; i++) {
+        if (!(s = nextword(s, paths[i]))) {
+            printf("usage: retrieve <path> <host_path>\n");
+            return;
+        }
+    }
+    uint32_t inum = fs_lookup(paths[0]);
+    if (inum == NULLINUM) {
+        printf("retrieve: %s: No such file or directory\n", paths[0]);
+        return;
+    }
+    int fd = open(paths[1], O_RDWR | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR);
+    if (fd < 0) {
+        perror("open");
+        return;
+    }
+    uint32_t off = 0;
+    for (;;) {
+        char c;
+        int n = inode_read(inum, &c, 1, off++);
+        if (!n)
+            break;
+        write(fd, &c, 1);
+    }
+    close(fd);
 }
 
-static void cmd_stat(char *path) {
-    uint32_t inum;
-    if ((inum = fs_lookup(path, 0)) == NULLINUM)
+void do_read(char *s, int w) {
+    char *p;
+    char buf[64];
+    char path[64];
+    int sz;
+    uint32_t off;
+    if (!(s = nextword(s, path))) {
+        printf("usage: read <path> <size> <offset>\n");
         return;
-    struct dinode di;
-    read_inode(inum, &di);
-    printf("linkcnt:%u major:%u minor:%u size:%u type:%u\n", di.linkcnt, di.major, di.minor, di.size, di.type);
-}
-
-static void cmd_write(char *path, uint32_t off, char *s) {
-    uint32_t inum;
-    if ((inum = fs_lookup(path, 0)) == NULLINUM)
+    }
+    if (!(s = nextword(s, buf))) {
+        printf("read: missing size\n");
         return;
-    assert(inode_write(inum, s, strlen(s), off) == strlen(s));
-}
-
-static void cmd_read(char *path, uint32_t off, uint32_t sz) {
-    uint32_t inum;
-    if ((inum = fs_lookup(path, 0)) == NULLINUM)
+    }
+    sz = (uint32_t)strtol(buf, &p, 10);
+    if (!p) {
+        printf("read: %s: invalid size\n", buf);
         return;
-    char buf[BLOCKSIZE];
-    uint32_t n = inode_read(inum, buf, sz, off);
-    if (n != (uint32_t)-1)
+    }
+    if (!(s = nextword(s, buf))) {
+        printf("read: missing offset\n");
         return;
+    }
+    off = (uint32_t)strtol(buf, &p, 10);
+    if (!p) {
+        printf("read: %s: invalid offset\n", buf);
+        return;
+    }
+    uint32_t inum = fs_lookup(path);
+    if (inum == NULLINUM) {
+        printf("read: %s: No such file or directory\n", path);
+        return;
+    }
+    if (w) {
+        int n = inode_write(inum, buf, min(64, sz), off);
+        if (n != min(64, sz))
+            panic("fs error");
+        return;
+    }
+    int n = inode_read(inum, buf, min(64, sz), off);
     for (int i = 0; i < n; i++) {
         if (isprint(buf[i]))
             printf("%c", buf[i]);
-        else if (!buf[i])
-            printf("\\0");
-        else
-            printf("\\?");
+        else printf("%c\n", 0xFFFD);
     }
-    puts("");
 }
 
-#define CMDLEN 32
+void do_mkdir(char *s) {
+    char path[64];
+    if (!nextword(s, path))
+        printf("usage: mkdir <path>\n");
+    fs_mknod(path, T_DIR);
+}
+
+void do_touch(char *s) {
+    char path[64];
+    if (!nextword(s, path))
+        printf("usage: touch <path>\n");
+    fs_mknod(path, T_REG);
+}
+
+void do_rm(char *s) {
+    char path[64];
+    if (!nextword(s, path))
+        printf("usage: rm <path>\n");
+    fs_unlink(path);
+}
+
 int main(int argc, char *argv[]) 
 {
     if (argc < 3) {
@@ -177,14 +216,15 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
-    if ((mkfs.fd = open(argv[1], O_RDWR)) < 0) {
+    mkfs.fd = open(argv[1], O_RDWR);
+    if (mkfs.fd < 0) {
         perror("open");
         exit(1);
     }
 
     int n = atoi(argv[2]);
     if (strlen(argv[2]) != 1 || !isnumber(argv[2][0]) || n < 1 || n > 4) {
-        fprintf(stderr, "invalid partition number\n");
+        fprintf(stderr, "mkfs: %s: invalid partition number\n", argv[2]);
         exit(1);
     }
 
@@ -210,55 +250,32 @@ int main(int argc, char *argv[])
         assert(fs_init(&partble[n - 1], disk_read, disk_write, printf) >= 0);
     }
     for (;;) {
-        char cmd[CMDLEN];
+        char s[64], w[64];
         printf("> "), fflush(stdout);
-        fgets(cmd, CMDLEN, stdin);
-        cmd[strlen(cmd) - 1] = 0;
-        char *args[5];
-        int cnt = parse_args(cmd, args, 5);
-        if (!cnt)
+        fgets(s, 64, stdin);
+        s[strlen(s) - 1] = 0; // rid of '/n'
+        char *p;
+        if (!(p = nextword(s, w)))
             continue;
-        if (!strncmp(args[0], "ls", 2)) {
-            if (cnt < 2)
-                fprintf(stdout, "usage: ls <path>\n");
-            else
-                cmd_ls(args[1]);
-        } else if (!strncmp(args[0], "mkdir", 5)) {
-            if (cnt < 2)
-                fprintf(stdout, "usage: mkdir <path>\n");
-            else
-                cmd_mkdir(args[1]);
-        } else if (!strncmp(args[0], "migrate", 7)) {
-            if (cnt < 3)
-                fprintf(stdout, "usage: migrate <filepath> <host_path>\n");
-            else
-                cmd_migrate(args[1], args[2]);
-        } else if (!strncmp(args[0], "retrieve", 8)) {
-            if (cnt < 3)
-                fprintf(stdout, "usage: retrieve <host_path> <filepath>\n");
-            else
-                cmd_retrieve(args[1], args[2]);
-        } if (!strncmp(args[0], "read", 4)) {
-            if (cnt < 4)
-                fprintf(stdout, "read: read <path> <off> <size>\n");
-            else
-                cmd_read(args[1], atoi(args[2]), atoi(args[3]));
-        } if (!strncmp(args[0], "write", 5)) {
-            if (cnt < 4)
-                fprintf(stdout, "write: write <path> <off> <word>\n");
-            else
-                cmd_write(args[1], atoi(args[2]), args[3]);
-        } if (!strncmp(args[0], "stat", 4)) {
-            if (cnt < 2)
-                fprintf(stdout, "stat: stat <path>\n");
-            else
-                cmd_stat(args[1]);
-        } if (!strncmp(args[0], "touch", 5)) {
-            if (cnt < 2)
-                fprintf(stdout, "touch: touch <path>\n");
-            else
-                cmd_touch(args[1]);
-        } else if (!strncmp(args[0], "quit", 4))
-            exit(0);
+        if (!strncmp("ls", w, 2))
+            do_ls(p);
+        else if (!strncmp("migrate", w, 7))
+            do_migrate(p);
+        else if (!strncmp("retrieve", w, 8))
+            do_retrieve(p);
+        else if (!strncmp("read", w, 4))
+            do_read(p, 0);
+        else if (!strncmp("write", w, 5))
+            do_read(p, 1);
+        else if (!strncmp("mkdir", w, 5))
+            do_mkdir(p);
+        else if (!strncmp("touch", w, 5))
+            do_touch(p);
+        else if (!strncmp("rm", w, 2))
+            do_rm(p);
+        else if (!strncmp("quit", w, 4))
+            exit(1);
+        else
+            printf("mkfs: %s: invalid command\n", w);
     }
 }

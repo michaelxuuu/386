@@ -1,12 +1,64 @@
 #include <stdint.h>
-#include <stdlib.h>
-#include <string.h>
 
 #include "inc.h"
 #include "../kernel/fs.h"
 #include "../partition/partition.h"
 
 #define MAXPATH 64
+
+static char *strncpy(char *dest, char *src, int n) {
+    for (int i = 0; i < n; i++) {
+        *dest = *src ? *src : 0;
+        dest++;
+        if (*src) src++;
+    }
+    return dest;
+}
+
+static int strlen(char *s) {
+    for (int i = 0;;i++) {
+        if (!s[i])
+            return i;
+    }
+}
+
+static int strnlen(char *s, int n) {
+    for (int i = 0; i < n; i++) {
+        if (!s[i])
+            return i;
+    }
+    return n;
+}
+
+static int strcmp(char *s1, char *s2) {
+    for (; *s1 && *s2; s1++, s2++) {
+        if (*s1 < *s2)
+            return -1;
+        else if (*s1 > *s2)
+            return 1;
+    }
+    if (*s1 == *s2) // equally long
+        return 0;
+    else if (*s1)   // s1 is longer
+        return 1;
+    else            // s2 is longer
+        return -1;
+}
+
+static void *memset(void *p, int c, int len) {
+    char *pp = p;
+    for (int i = 0; i < len; i++)
+        pp[i] = c;
+    return p;
+}
+
+static void *memcpy(void *dest, void *src, int n) {
+    char *d = (char *)dest;
+    char *s = (char *)src;
+    for (int i = 0; i < n; i++)
+        d[i] = s[i];
+    return dest;
+}
 
 // Encapsulating global variables within a global unnamed struct 
 // not only organizes the code but also reduces naming conflicts
@@ -69,33 +121,34 @@ static int bitmap_free(uint32_t n)
     return 0;
 }
 
-// Caller has to make sure n is a valid inode number
-int read_inode(uint32_t n, struct dinode *p) 
+int rw_inode(uint32_t inum, struct dinode *p, int w)
 {
     union block b;
     if (!fs.init) {
-        fs.printf("read_inode: fs not initialized\n");
+        fs.printf("uninitialized\n");
         return -1;
     }
-    // Read a inode block to the buffer
-    fs.disk_read(fs.su.sinode + n/NINODES_PER_BLOCK, &b);
-    // Read the target inode
-    *p = b.inodes[n%NINODES_PER_BLOCK];
+    if (inum >= fs.su.ninodes) {
+        fs.printf("inum %d out of bounds\n", inum);
+        return -1;
+    }
+    fs.disk_read(fs.su.sinode + inum / NINODES_PER_BLOCK, &b);
+    if (w) {
+        b.inodes[inum % NINODES_PER_BLOCK] = *p;
+        fs.disk_write(fs.su.sinode + inum / NINODES_PER_BLOCK, &b);
+    }
+    *p = b.inodes[inum % NINODES_PER_BLOCK];
     return 0;
 }
 
-// Caller has to make sure n is a valid inode number
-int write_inode(uint32_t n, struct dinode *p) 
+int read_inode(uint32_t inum, struct dinode *p) 
 {
-    union block b;
-    if (!fs.init) {
-        fs.printf("write_inode: fs not initialized\n");
-        return -1;
-    }
-    fs.disk_read(fs.su.sinode + n/NINODES_PER_BLOCK, &b);
-    b.inodes[n%NINODES_PER_BLOCK] = *p;
-    fs.disk_write(fs.su.sinode + n/NINODES_PER_BLOCK, &b);
-    return 0;
+    return rw_inode(inum, p, 0);
+}
+
+int write_inode(uint32_t inum, struct dinode *p)
+{
+    return rw_inode(inum, p, 1);
 }
 
 // Given a index into the 'ptrs' array in an inode,
@@ -158,14 +211,11 @@ int free_inode(uint32_t n)
     union block b;
     struct dinode di;
     if (!fs.init) {
-        fs.printf("free_inode: fs not initialized\n");
+        fs.printf("uninitialized\n");
         return -1;
     }
-    if (n >= fs.su.ninodes) {
-        fs.printf("free_inode: inode number %d is out of range", n);
+    if (read_inode(n, &di) < 0)
         return -1;
-    }
-    read_inode(n, &di);
     di.type = 0;
     for (int i = 0; i < NPTRS; i++)
         if (di.ptrs[i])
@@ -178,7 +228,7 @@ uint32_t alloc_inode(uint16_t type)
 {
     // Invalid inode type, return error
     if (type > T_DEV) {
-        fs.printf("alloc_inode: invalid inode type\n");
+        fs.printf("alloc_inode: %d: Invalid type\n", type);
         return NULLINUM;
     }
     // Loop through all blocks for inode
@@ -198,6 +248,7 @@ uint32_t alloc_inode(uint16_t type)
             }
         }
     }
+    fs.printf("alloc_inode: Out of inodes\n");
     return NULLINUM;
 }
 
@@ -257,7 +308,7 @@ static int recursive_rw(
     } else {
         // Handle reading sparse files
         if (!*pp) {
-            uint32_t sz = (eblock - sblock) * BLOCKSIZE;
+            int sz = (eblock - sblock) * BLOCKSIZE;
             if (sa->left < sz)
                 sz = sa->left;
             memset(sa->buf, 0, sz);
@@ -287,7 +338,7 @@ static int recursive_rw(
     }
     // It's a data block.
     uint32_t start = sa->off % BLOCKSIZE;
-    uint32_t sz = sa->left < (BLOCKSIZE - start) ? sa->left : (BLOCKSIZE - start);
+    int sz = sa->left < (BLOCKSIZE - start) ? sa->left : (BLOCKSIZE - start);
     fs.disk_read(*pp, &b);
     if (sa->w) {
         memcpy(&b.bytes[start], sa->buf, sz);
@@ -301,18 +352,22 @@ static int recursive_rw(
     return 0;
 }
 
-static uint32_t inode_rw(uint32_t n, void *buf, uint32_t sz, uint32_t off, int w)
+static int inode_rw(uint32_t inum, void *buf, int sz, uint32_t off, int w)
 {
     struct dinode di;
     uint32_t sbyte = off;
     uint32_t ebyte = off + sz;
-    // Invalid inode number
-    if (n >= fs.su.ninodes) {
-        fs.printf("inode number %d is out of range", n);
+    if (!fs.init) {
+        fs.printf("uninitialized\n", inum);
+        return -1;
+    }
+    if ((uint32_t)sz > (uint32_t)0xefffffff) {
+        fs.printf("inode_rw: %u: size out of bounds", sz);
         return -1;
     }
     // Read inode structure
-    read_inode(n, &di);
+    if (read_inode(inum, &di) < 0)
+        return -1;
     if (!w && sbyte >= di.size)
         return 0;
     if (!w && ebyte >= di.size) {
@@ -340,33 +395,29 @@ static uint32_t inode_rw(uint32_t n, void *buf, uint32_t sz, uint32_t off, int w
                             // consumed from buf (write) or from disk (read)
     di.size = di.size > ebyte ? di.size : ebyte; // update inode size in case it's a write operation
     if (w)
-        assert(!write_inode(n, &di)); // update inode
+        assert(!write_inode(inum, &di)); // update inode
     return consumed;
 }
 
-uint32_t inode_write(uint32_t n, void *buf, uint32_t sz, uint32_t off) {
-    if (!fs.init) {
-        fs.printf("inode_write: fs not initialized\n");
-        return -1;
-    }
-    return inode_rw(n, buf, sz, off, 1);
+// 'sz' is chosen to be of type 'int' since this filesystem is made for a 32-bit system
+// where you can have a maximum of 4GB physical memory. The largest signed integer is
+// 0xefffffff, which is half of that. Anyone sane, knowing they're programming for
+// a 32-bit system, should not create a 'buf' over that size.
+int inode_write(uint32_t inum, void *buf, int sz, uint32_t off) {
+    return inode_rw(inum, buf, sz, off, 1);
 }
 
-uint32_t inode_read(uint32_t n, void *buf, uint32_t sz, uint32_t off) {
-    if (!fs.init) {
-        fs.printf("inode_read: fs not initialized\n");
-        return -1;
-    }
-    return inode_rw(n, buf, sz, off, 0);
+int inode_read(uint32_t inum, void *buf, int sz, uint32_t off) {
+    return inode_rw(inum, buf, sz, off, 0);
 }
 
 // Look up 'name' under the directory pointed to by 'inum.'
 // Return the inum of the dirent containing 'name' if found and NULLINUM (0) otherwise.
 // Write the offset of the dirent found into *poff if it's not NULL.
-static uint32_t dir_lookup(uint32_t inum, char *name, uint32_t *poff)
+uint32_t dir_lookup(uint32_t inum, char *name, uint32_t *poff)
 {
     struct dinode di;
-    read_inode(inum, &di);
+    assert(read_inode(inum, &di) >= 0);
     // Not a directory
     if (di.type != T_DIR)
         return NULLINUM;
@@ -374,7 +425,7 @@ static uint32_t dir_lookup(uint32_t inum, char *name, uint32_t *poff)
     for (int i = 0; i < di.size / sizeof(struct dirent); 
         i++, off += sizeof(struct dirent)) {
         struct dirent de;
-        inode_read(inum, &de, sizeof(struct dirent), off);
+        assert(inode_read(inum, &de, sizeof de, off) == sizeof de);
         if (!strcmp(name, de.name)) {
             if (poff)
                 *poff = off;
@@ -385,8 +436,7 @@ static uint32_t dir_lookup(uint32_t inum, char *name, uint32_t *poff)
 }
 
 // Find the inode corresponds to the given path.
-// If parent = 1, stop one level early at the parent dir.
-uint32_t fs_lookup(char *path, int parent) {
+uint32_t fs_lookup(char *path) {
     if (!path)
         return NULLINUM;
     int l = strnlen(path, MAXPATH);
@@ -412,20 +462,13 @@ uint32_t fs_lookup(char *path, int parent) {
         name[l] = 0;
         // skip following slashes
         for (; *path && *path == '/'; path++);
-        // stop one level early to return the inode of the parent dir
-        if (!*path && parent)
-            break;
         if (!(inum = dir_lookup(inum, name, 0)))
             return NULLINUM;
     }
     return inum;
 }
 
-// Each path can be seen as parent/name
-// * Copy the "name" part into the 'name' buf
-// * Optionally copy the "parent" part into the 'parent' buf
-// * Return a pointer to the start of the "name" part on success
-// * Return 0 when no specified, as in path "////////" or ""
+// Every path can be seen as parent/name
 static char *getname(char *path, char *name, char *parent) {
     if (!path)
         return 0;
@@ -451,52 +494,50 @@ static char *getname(char *path, char *name, char *parent) {
     return p;
 }
 
-// path = parent(dir)/name
-// Create an inode and link it under "parent" with "name"
-int fs_mknod(char *path, uint16_t type) {
+// Create an inode pointed to by path
+uint32_t fs_mknod(char *path, uint16_t type) {
     uint32_t n;
     char parent[MAXPATH];
     char name[MAXNAME];
     struct dinode di;
     struct dirent de;
     if (!getname(path, name, parent)) {
-        fs.printf("no name specified\n");
-        return -1;
+        fs.printf("fs_mknod: %s: Invalid path\n");
+        return NULLINUM;
     }
     // Parent path must points to a valid *directory* inode.
-    n = fs_lookup(path, 1);
+    n = fs_lookup(parent);
     if (n == NULLINUM) {
-        fs.printf("parent directory not found %s\n", parent);
-        return -1;
+        fs.printf("fs_mknod: %s: No such file or directory\n", parent);
+        return NULLINUM;
     }
-    read_inode(n, &di);
+    // inums stored in directory entries are supposedly valid
+    assert(read_inode(n, &di) >= 0);
     if (di.type != T_DIR) {
-        fs.printf("not a directory %s\n", parent);
-        return -1;
+        fs.printf("fs_mknod: %s: Not a directory\n", parent);
+        return NULLINUM;
     }
     // Check for duplicates
     if (dir_lookup(n, name, 0)) {
-        fs.printf("%s found under %s\n", name, parent);
-        return -1;
+        fs.printf("fs_mknod: %s: file exists\n", name);
+        return NULLINUM;
     }
     // Create an inode.
     de.inum = alloc_inode(type);
-    if (de.inum == NULLINUM) {
-        fs.printf("failed to allocate inode\n");
-        return -1;
-    }
+    if (de.inum == NULLINUM)
+        return NULLINUM;
     // Link it to the "parent" dir.
     strncpy(de.name, name, MAXNAME);
     if (inode_write(n, &de, sizeof de, di.size) != sizeof de) {
         free_inode(de.inum);
-        fs.printf("failed to write %s\n", parent);
-        return -1;
+        fs.printf("fs_mknod: %s: dir write failed\n", parent);
+        return NULLINUM;
     }
     // Inc link count to 1 cus now "parent" dir points to it.
     read_inode(de.inum, &di);
     di.linkcnt++;
     write_inode(de.inum, &di);
-    return 0;
+    return de.inum;
 }
 
 // path=parent/name
@@ -512,35 +553,40 @@ int fs_unlink(char *path) {
     char name[MAXNAME];
     char parent[MAXPATH];
     if (!getname(path, name, parent)) {
-        fs.printf("no name specified\n");
+        fs.printf("fs_unlink: %s: Invalid path\n");
         return -1;
     }
     // Parent path must points to a valid *directory* inode.
-    n = fs_lookup(path, 1);
+    n = fs_lookup(parent);
     if (n == NULLINUM) {
-        fs.printf("parent directory not found %s\n", parent);
+        fs.printf("fs_unlink: %s: No such file or directory\n", parent);
         return -1;
     }
-    read_inode(n, &di);
+    assert(read_inode(n, &di) >= 0);
     if (di.type != T_DIR) {
-        fs.printf("not a directory %s\n", parent);
+        fs.printf("fs_unlink: %s: Not a directory\n", parent);
         return -1;
     }
     // "name" must be in the parent directory
     nn = dir_lookup(n, name, &off);
     if ((nn = dir_lookup(n, name, &off)) ==  NULLINUM) {
-        fs.printf("%s not found under %s\n", name, parent);
+        fs.printf("fs_unlink: %s: File doesn't exist\n", name);
+        return -1;
+    }
+    read_inode(nn, &di);
+    // Can't let non-empty directory be unlinked
+    if (di.type == T_DIR && di.size) {
+        fs.printf("fs_unlink: %s: Is a non-empty directory\n", parent);
         return -1;
     }
     // Zero the directory entry found
     memset(&de, 0, sizeof de);
     assert(inode_write(n, &de, sizeof de, off) == sizeof de);
     // Decrement the link count cus "name" no longer points to that inode
-    read_inode(nn, &di);
     di.linkcnt--;
     if (!di.linkcnt) {
         // Free the inode if link count reaches 0
-        assert(free_inode(nn));
+        assert(free_inode(nn) >= 0);
         return 0;
     }
     write_inode(nn, &di);
@@ -559,27 +605,27 @@ int fs_link(char *new, char *old) {
     char name[MAXNAME];
     char parent[MAXPATH];
     if (!getname(new, name, parent)) {
-        fs.printf("no name specified\n");
+        fs.printf("fs_link: %s: Invalid path\n", new);
         return -1;
     }
     // The "old" path must point a valid inode.
-    if ((nn = fs_lookup(old, 0)) != NULLINUM) {
-        fs.printf("no such file or directory %s\n", old);
+    if ((nn = fs_lookup(old)) != NULLINUM) {
+        fs.printf("fs_link: %s: No such file or directory\n", old);
         return -1;
     }
     // Parent path must point to a *directory* inode.
-    if ((n = fs_lookup(new, 1)) == NULLINUM) {
-        fs.printf("parent directory not found %s\n", parent);
+    if ((n = fs_lookup(parent)) == NULLINUM) {
+        fs.printf("fs_link: %s: No such file or directory\n", parent);
         return -1;
     }
     read_inode(n, &di);
     if (di.type != T_DIR) {
-        fs.printf("not a directory %s\n", parent);
+        fs.printf("fs_link: %s: Not a directiry\n", parent);
         return -1;
     }
     // "name" must *not* be in "parent" already.
     if (dir_lookup(n, name, 0) != NULLINUM) {
-        fs.printf("%s found under %s\n", name, parent);
+        fs.printf("fs_link: %s: File exists\n", name);
         return -1;
     }
     // Create a new directory entry with "name"
@@ -587,7 +633,7 @@ int fs_link(char *new, char *old) {
     de.inum = nn;
     strncpy(de.name, name, MAXNAME);
     if (inode_write(n, &de, sizeof de, off) != sizeof de) {
-        fs.printf("failed to append to dir\n");
+        fs.printf("fs_link: %s: dir write failed\n", parent);
         return -1;
     }
     // Increment the link count as now new also points to it.
