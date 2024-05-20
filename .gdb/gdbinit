@@ -42,4 +42,7 @@ set tdesc filename .gdb/target.xml
 break *0x7c00
 continue
 # qemu breaks at cs:ip so we add 0x90000
-break *0x90000 + d
+# break *0x90000 + d
+set confirm off
+symbol-file grab/stage2.elf
+break start2

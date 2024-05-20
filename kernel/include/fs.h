@@ -1,8 +1,6 @@
 #ifndef _fs_h_
 #define _fs_h_
 
-#include <stdint.h>
-
 // FS layout
 //
 // super block | log blocks | inode blocks | bitmap block | data blocks

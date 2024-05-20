@@ -1,10 +1,6 @@
 #ifndef _file_h_
 #define _file_h_
 
-#include <stdint.h>
-#include "../kernel/fs.h"
-#include "../partition/partition.h"
-
 typedef void (*diskfunc)(int blocknum, void *buf);
 typedef int (*printfunc)(const char *fmt, ...);
 

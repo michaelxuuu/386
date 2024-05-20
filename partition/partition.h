@@ -1,8 +1,6 @@
 #ifndef _partition_h_
 #define _partition_h_
 
-#include <stdint.h>
-
 // Partition table entry
 struct partition {
     uint8_t  bootable;

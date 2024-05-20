@@ -10,7 +10,7 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 
-#include "../kernel/fs.h"
+#include "../kernel/include/fs.h"
 #include "../partition/partition.h"
 #include "../fs/inc.h"
 
@@ -274,7 +274,7 @@ int main(int argc, char *argv[])
         else if (!strncmp("rm", w, 2))
             do_rm(p);
         else if (!strncmp("quit", w, 4))
-            exit(1);
+            exit(0);
         else
             printf("mkfs: %s: invalid command\n", w);
     }
