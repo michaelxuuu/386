@@ -1,7 +1,7 @@
 .PHONY: gdb gdb-in-new-bash-session \
 		qemu kill-qemu \
 		grab mkfs \
-		vhd vhd.1 vhd.2 vhd.3 vhd.4 vhd.5 \
+		vhd.1 vhd.2 vhd.3 vhd.4 vhd.5 \
 		clean
 
 GRAB=./grab/
@@ -38,7 +38,7 @@ vhd.3:
 	docker exec $(CONTAINER) bash -c "fdisk -l /host/$(shell pwd)/vhd"
 
 vhd.4: mkfs
-	$(MKFS)/mkfs vhd 1
+	echo "quit" | $(MKFS)/mkfs vhd 1
 
 vhd.5: grab
 	dd if=$(GRAB)/stage1.bin of=vhd bs=1 count=$(shell echo $$((512-2-16*4))) conv=notrunc

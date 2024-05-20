@@ -1,6 +1,3 @@
-#ifndef _fs_h_
-#define _fs_h_
-
 // FS layout
 //
 // super block | log blocks | inode blocks | bitmap block | data blocks
@@ -78,5 +75,3 @@ union block {
     struct dinode inodes[NINODES_PER_BLOCK];
     struct dirent dirents[NDIRENTS_PER_BLOCK];
 };
-
-#endif

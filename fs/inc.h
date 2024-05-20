@@ -1,6 +1,3 @@
-#ifndef _file_h_
-#define _file_h_
-
 typedef void (*diskfunc)(int blocknum, void *buf);
 typedef int (*printfunc)(const char *fmt, ...);
 
@@ -14,5 +11,3 @@ int read_inode(uint32_t n, struct dinode *p);
 int write_inode(uint32_t n, struct dinode *p);
 int inode_read(uint32_t inum, void *buf, int sz, uint32_t off);
 int inode_write(uint32_t inum, void *buf, int sz, uint32_t off);
-
-#endif

@@ -36,13 +36,15 @@ define print_instr
 	end
 end
 
+set confirm off
+set pagination off
 target remote localhost:1234
 symbol-file ./grab/stage1.elf
 set tdesc filename .gdb/target.xml
 break *0x7c00
 continue
 # qemu breaks at cs:ip so we add 0x90000
-# break *0x90000 + d
-set confirm off
+break *0x90000 + d
+continue
 symbol-file grab/stage2.elf
 break start2

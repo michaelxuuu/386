@@ -2,7 +2,7 @@ KERNEL = ../kernel
 FS = ../fs
 UTILITY = ../utility
 INC = -I$(KERNEL)/include -I$(FS) -I$(UTILITY)
-STAGE2_SRC = $(wildcard stage2.c $(KERNEL)/vga.c $(KERNEL)/pio.c $(UTILITY)/*.c)
+STAGE2_SRC = $(wildcard $(KERNEL)/vga.c $(KERNEL)/pio.c $(UTILITY)/*.c stage2.c)
 STAGE2_OBJ = $(STAGE2_SRC:.c=.o)
 
 LD_FLAGS = -g -static --fatal-warnings -melf_i386
@@ -22,10 +22,10 @@ CFLAGS_GCC = $(CFLAGS_COMMON) \
 grab: stage1.bin stage2.bin stage1.elf stage2.elf
 
 stage2.elf: $(STAGE2_OBJ)
-	x86_64-elf-ld $(LD_FLAGS) -Ttext 0x0 -o stage2.elf -e start2 $^ -g
+	x86_64-elf-ld $(LD_FLAGS) -Tstage2.lds -o stage2.elf -e start2 $^ -g
 
 stage2.bin: $(STAGE2_OBJ)
-	x86_64-elf-ld $(LD_FLAGS) -Ttext 0x0 -o stage2.bin -e start2 --oformat binary $^ -g
+	x86_64-elf-ld $(LD_FLAGS) -Tstage2.lds -o stage2.bin -e start2 --oformat binary $^ -g
 
 stage1.elf: stage1.o
 	x86_64-elf-ld $(LD_FLAGS) -Ttext 0x0 -o stage1.elf -e _start stage1.o -g
