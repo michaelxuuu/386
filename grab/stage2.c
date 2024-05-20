@@ -1,4 +1,4 @@
-#include "vga.h"
+#include <vga.h>
 
 void start2(void) __attribute__((section(".text.start2")));
 

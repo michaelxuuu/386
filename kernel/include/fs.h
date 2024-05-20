@@ -75,3 +75,18 @@ union block {
     struct dinode inodes[NINODES_PER_BLOCK];
     struct dirent dirents[NDIRENTS_PER_BLOCK];
 };
+
+// Partition table entry
+struct partition {
+    uint8_t  bootable;
+    uint8_t  startc:8;
+    uint16_t starth:10;
+    uint16_t starts:6;
+    uint8_t  sysid;
+    uint8_t  endc:8;
+    uint16_t endh:10;
+    uint16_t ends:6;
+    uint32_t startlba;
+    uint32_t nsectors;
+};
+

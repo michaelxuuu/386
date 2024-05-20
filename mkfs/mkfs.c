@@ -11,7 +11,6 @@
 #include <sys/wait.h>
 
 #include "../kernel/include/fs.h"
-#include "../partition/partition.h"
 #include "../fs/inc.h"
 
 #define min(x, y) (x < y ? x : y)

@@ -4,14 +4,13 @@
     #include <stdlib.h>
     #include <string.h>
 #elif defined(BUILD_TARGET_386)
-    #include <../utility/util.h>
+    #include <../kernel/include/util.h>
     #include <../kernel/include/types.h>
 #else
     #error "BUILD_TARGET undefined"
 #endif
 
 #include "../kernel/include/fs.h"
-#include "../partition/partition.h"
 #include "inc.h"
 
 #define MAXPATH 64
