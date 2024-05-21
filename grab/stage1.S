@@ -28,8 +28,8 @@ go16:
     mov $0x9000, %ax
     mov %ax, %ds
     mov %ax, %ss
-// set up stack at 0x9000
-    mov $0x9000, %sp
+// set up stack at 0x9fc00 = 0x90000 + 0xfc00
+    mov $0xfc00, %sp
     mov %sp, %bp
 // set vga mode and clear screen
     mov $0, %ah
@@ -72,6 +72,12 @@ go16:
     mov $2, %ah
     int $0x13
     jc die
+// use bios to get the pci configuration space access mode (1 or 2)
+d: // debugging symbol
+    xor %al, %al
+    mov $0xb101, %ax
+    int $0x1a
+    push %eax
 // now we're done with bios and can overwrite its memroy!
 // move the bootloader kernel image to the zero address
 // relocate 63 sectors starting from 0x10000 to 0x0
@@ -93,17 +99,22 @@ to32: // debugging symbol
     mov %cr0, %eax
     or $1, %eax
     mov %eax, %cr0
-d:
     ljmpl $8, $0x90000+go32
+    // From here to when we finish go32
+    // we should not perform any data access
+    // that involves %ds and %ss!!!
 .code32
 go32:
     mov $16, %ax
     mov %ax, %ds
     mov %ax, %ss
+    // adjust sp to 0x90000 + sp as we did with %cs in ljmpl!!!
+    add $0x90000, %esp
+    add $0x90000, %ebp
     // jump tp 0x0 where we placed the bootloader kernel
-    pushl $0
-    ret
-
+    xor %eax, %eax
+    call *%eax
+    jmp die
 // test the input buffer full (ibf) bit is set in i8042's status register
 // ibf indicates an error response from i8042 in a20 enabling sequence
 ibf8042:

@@ -1,11 +1,8 @@
 #include <vga.h>
+#include <printf.h>
 
-void start2(void) __attribute__((section(".text.start2")));
+void start2(int pcimod) __attribute__((section(".text.start2")));
 
-void start2() {
-    for (;;) {
-        for (int i = 0; i < 26; i++)
-            putchar('a' + i);
-        putchar('\n');
-    }
+void start2(int pcimod) {
+    printf("%d", 12);
 }

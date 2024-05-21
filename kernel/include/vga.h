@@ -28,6 +28,5 @@
 
 #define BLINK      0x80 /* Annoying. */
 
-
 void putchar(char c);
 void vga_reset();
