@@ -4,8 +4,8 @@
     #include <stdlib.h>
     #include <string.h>
 #elif defined(BUILD_TARGET_386)
-    #include <../kernel/include/util.h>
-    #include <../kernel/include/types.h>
+    #include <util.h>
+    #include <types.h>
 #else
     #error "BUILD_TARGET undefined"
 #endif

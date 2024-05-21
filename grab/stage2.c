@@ -4,5 +4,5 @@
 void start2(int pcimod) __attribute__((section(".text.start2")));
 
 void start2(int pcimod) {
-    printf("%d", 12);
+    printf("%d", 129);
 }

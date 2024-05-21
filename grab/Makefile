@@ -1,6 +1,6 @@
--include ../include.mk
+-include ../common.mk
 
-SRC_STAGE2 = $(wildcard $(PATH_KERNEL)/vga.c $(PATH_KERNEL)/pio.c $(PATH_KERNEL)/util.c $(PATH_KERNEL)/printf.c stage2.c)
+SRC_STAGE2 = $(wildcard *.c)
 OBJ_STAGE2 = $(SRC_STAGE2:.c=.o)
 
 all: stage1.bin stage2.bin stage1.elf stage2.elf
@@ -21,7 +21,7 @@ stage1.elf: stage1.o
 	$(LD) $(FLAGS_LD) -Ttext 0x0 -e _start -o $@ $^
 
 stage1.o: stage1.S
-	$(CC) $(FLAGS_CC) -c -o $@ $^
+	$(CC) $(INCLUDE) $(FLAGS_CC) -c -o $@ $^
 
 clean:
-	-rm *.o *.bin *.elf $(OBJ_STAGE2)
+	-rm *.o *.bin *.elf

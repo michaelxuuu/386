@@ -10,8 +10,8 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 
-#include "../kernel/include/fs.h"
-#include "../fs/inc.h"
+#include <fs.h>
+#include <inc.h>
 
 #define min(x, y) (x < y ? x : y)
 #define max(x, y) (x > y ? x : y)

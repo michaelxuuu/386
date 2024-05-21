@@ -2,7 +2,7 @@
 // i/o port addresses are 16 bits
 // 
 
-#include "../kernel/include/types.h"
+#include <types.h>
 
 uint8_t inb(uint16_t port) {
     uint8_t byte;

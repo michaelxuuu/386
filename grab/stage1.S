@@ -1,7 +1,7 @@
 .global _start
 .text
 
-#include "../kernel/include/asm.h"
+#include <asm.h>
 
 .code16
 _start:

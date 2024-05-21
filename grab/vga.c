@@ -1,8 +1,8 @@
-#include "include/types.h"
-#include "include/asm.h"
-#include "include/vga.h"
-#include "include/util.h"
-#include "include/pio.h"
+#include <types.h>
+#include <asm.h>
+#include <vga.h>
+#include <util.h>
+#include <pio.h>
 // crtc i/o ports
 #define PORT_INDEX      0x3d4
 #define PORT_DATA       0x3d5
