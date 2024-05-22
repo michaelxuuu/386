@@ -44,7 +44,7 @@ void set_cursor(uint16_t off) {
 }
 // Print one char at the current cursor position and scroll if necessary
 void putchar(char c) {
-    uint16_t off = get_cursor();
+    int off = get_cursor();
     switch (c)
     {
     case '\n':
@@ -60,17 +60,12 @@ void putchar(char c) {
         textbuf[off++] = (c | COLOR << 8);
         break;
     }
-    // off-- may cause it to become negative. But we do not support scroll-up.
-    // So we reset off to 0 if it becomes negative.
-    if (off < 0)
-        off = 0;
     // Any increment of off may cause it to overflow the text buffer.
     // We must scroll down in case of overflow.
     // Luckily, we always scroll down by 1 row.
     if (off >= 25*80) {
         off = 24*80;
-        memcpy(&textbuf[0], &textbuf[80], 24*80);
-    asm("d:");
+        memcpy(&textbuf[0], &textbuf[80], 24*80*2);
         for (int i = 24*80; i < 25*80; textbuf[i++] &= 0xff00);
     }
     set_cursor(off);
