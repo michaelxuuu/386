@@ -18,6 +18,8 @@ static void _int(int x, int sign, int base) {
     // max signed int is 2147483647
     // max unsigned int is 4294967295
     // both are 10 digits and even shorter if base 16 is used
+    if (!x)
+        putchar('0');
     uint32_t abs;
     char xx[11];
     int i, d;
