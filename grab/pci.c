@@ -5,13 +5,15 @@
 // Concepts:
 // PCI device, PCI controller, port mapped i/o
 //
-// CPU <-in/out-> PCI controller  V PCI lanes
-//                                |
-//                                | PCI device 0        
-//                                | PCI device 1
-//                                | PCI device 2
-//                                | ...
-//                                | PCI device 31 [why 31? look at the device number of the address format below]
+// CPU <-in/out-> 
+// system bus <-> 
+// host bridge (i/o controller) <-> 
+// PCI controller <-> PCI lanes
+//                          | PCI device 0        
+//                          | PCI device 1
+//                          | PCI device 2
+//                          | ...
+//                          | PCI device 31 [why 31? look at the device number of the address format below]
 //
 // PCI controller is assigned 2 i/o ports - 0xcf8 for its address register and 0xcfc for its data register.
 // CPU communicates with it through accessing these two i/o ports using in/out instructions.
