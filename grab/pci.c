@@ -52,7 +52,7 @@
 // 0x0	    | 0x0	    |   Device  ID	                | Vendor ID     
 // 0x1	    | 0x4	    |   Status                      | Command       
 // 0x2	    | 0x8	    |   Class code	| Subclass	    | Prog IF	    | Revision ID
-// 0x3	    | 0xC	    |   BIST Header | type	        | Latency Timer | Cache Line Size
+// 0x3	    | 0xC	    |   BIST        | Header type	| Latency Timer | Cache Line Size
 //
 // Header Type identifies the layout of the rest of the header beginning at byte 0x10 of the header. 
 // If bit 7 of this register is set, the device has multiple functions; otherwise, 
@@ -85,21 +85,19 @@ void printdev(uint8_t class, uint8_t subclass, uint8_t progif);
 //
 void scan(uint8_t bus)
 {
-// Check devices on this bus
     for (int dev = 0; dev < NDEV_PER_BUS; dev++) {
-    // Check functions of this device
+        // Device doesn't exist if vendor id read from
+        // the configuration space of its function 0 is 0xffff
+        uint16_t vendor = r_hdr_vendorid(bus, dev, 0);
+        if (vendor == NULLVENDOR)
+             continue;
+        uint16_t deviceid = r_hdr_deviceid(bus, dev, 0);
         // Test the multi-function bit in function 0's header,
         // and we don't bother checking other functions than function 0
         // if not set.
         int nfun = (r_hdr_type(bus, dev, 0) & (1 << 7)) ? NFUN_PER_DEV : 1;
         for (int fun = 0; fun < nfun; fun++) {
-            uint16_t vendor = r_hdr_vendorid(bus, dev, fun);
-            uint16_t deviceid = r_hdr_deviceid(bus, dev, fun);
-            // Device doesn't exist if vendor id read from
-            // the configuration space of its function 0 is 0xffff
-            if (vendor == NULLVENDOR && !fun)
-                break;
-            if (vendor == NULLVENDOR)
+            if (r_hdr_vendorid(bus, dev, 0) == NULLVENDOR)
                 continue;
             // Check if this function is PCI to PCI bridge,
             // and if it is we need to retrieve the secondary PCI bus ID
@@ -108,8 +106,8 @@ void scan(uint8_t bus)
             uint8_t class = r_hdr_class(bus, dev, fun);
             uint8_t subclass = r_hdr_subclass(bus, dev, fun);
             uint8_t progif = r_hdr_progif(bus, dev, fun);
-            printf("device id:%x vendor:%x class:%x subclass:%x\n", deviceid, vendor, class, subclass);
-            if (class == PCI_CLASS_STORAGE &&
+            printf("device id:%x device:%d function:%d vendor:%x class:%x subclass:%x\n", deviceid, dev, fun, vendor, class, subclass);
+            if (class == PCI_CLASS_BRIDGE &&
                 subclass == PCI_SUBCLASS_PCI2PCI) {
                 // PCI to PCI bridge function detected. Start recursion!
                 uint8_t secondarybus = r_hdr_pci2pci_secondarybus(bus, dev, fun);
