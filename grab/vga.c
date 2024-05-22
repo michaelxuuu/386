@@ -44,7 +44,7 @@ void set_cursor(uint16_t off) {
 }
 // Print one char at the current cursor position and scroll if necessary
 void putchar(char c) {
-    uint16_t off = get_cursor();
+    int off = get_cursor();
     switch (c)
     {
     case '\n':
@@ -66,7 +66,6 @@ void putchar(char c) {
     if (off >= 25*80) {
         off = 24*80;
         memcpy(&textbuf[0], &textbuf[80], 24*80*2);
-    asm("d:");
         for (int i = 24*80; i < 25*80; textbuf[i++] &= 0xff00);
     }
     set_cursor(off);
