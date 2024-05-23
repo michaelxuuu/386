@@ -56,6 +56,7 @@ void putchar(char c) {
         break;
     case '\t':
         off += 4;
+        break;
     default:
         textbuf[off++] = (c | COLOR << 8);
         break;

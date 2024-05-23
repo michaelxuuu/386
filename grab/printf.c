@@ -1,25 +1,34 @@
+#include <types.h>
 #include <vga.h>
 #include <arg.h>
 #include <util.h>
-#include <types.h>
 
 static char *digits = "0123456789abcdef";
 
-static void _char(char c) {
+static int _char(char c) {
     putchar(c);
+    return 1;
 }
 
-static void _string(char *s) {
-    while (*s)
+static int _string(char *s) {
+    int l = 0;
+    // Cap the max string length to 1K
+    // The rest of the string would be dropped!
+    while (*s && l < (1<<10)) {
         putchar(*s++);
+        l++;
+    }
+    return l;
 }
 
-static void _int(int x, int sign, int base) {
+static int _int(int x, int sign, int base) {
     // max signed int is 2147483647
     // max unsigned int is 4294967295
     // both are 10 digits and even shorter if base 16 is used
-    if (!x)
+    if (!x) {
         putchar('0');
+        return 1;
+    }
     uint32_t abs;
     char xx[11];
     int i, d;
@@ -28,49 +37,88 @@ static void _int(int x, int sign, int base) {
         d = abs % base;
         xx[i++] = digits[d];
     }
+    int n = i;
     if (sign && x < 0)
         putchar('-');
     while (--i >= 0)
         putchar(xx[i]);
+    return n;
 }
 
+// Supports %d %x %p %c %s
+// Additionally supports width specifiers:
+// %10d constructs an output space that's 10 characters wide
+// and prints the integer at the beginning, padding spaces to fill up the space
 void printf(char *s, ...) {
     va_list ap;
     va_start(ap, s);
-    enum { PLACEHOLDER, REGULAR } state = REGULAR;
-    for (; *s; s++) {
-        if (state == REGULAR) {
+    enum { SPECIFIER, REGULAR, WIDTH_SPECIFIER, TYPE_SPECIFIER } state = REGULAR;
+    while (*s) {
+        char widbuf[10]; // Stores the withd specifier if used
+        char *widbuf_ptr; // Where we are in 'widbuf?'
+        int n; // Number of characters printed by the type specifier handling functions - _char(), _string(), and _int()
+                // Used to determine how many space left in width for padding spaces from behind
+                // Note. We do not support front padding!
+        switch (state) {
+        case REGULAR:
             if (*s == '%')
-                state = PLACEHOLDER;
+                state = SPECIFIER;
             else
                 putchar(*s);
-        } else if (state == PLACEHOLDER) {
-            switch (*s)
+            s++;
+            break;
+        case SPECIFIER:
+            if (isdigit(*s)) {
+                state = WIDTH_SPECIFIER;
+                widbuf_ptr = widbuf;
+            } else if (*s)
+                state = TYPE_SPECIFIER;
+            break;
+        case WIDTH_SPECIFIER:
+            if (isdigit(*s) && (widbuf_ptr - widbuf) < 10)
+                *widbuf_ptr++ = *s++;
+            else {
+                state = TYPE_SPECIFIER;
+                *widbuf_ptr = 0;
+            }
+            break;
+        case TYPE_SPECIFIER:
+            switch (*s++)
             {
             case 'c':
-                _char(va_arg(ap, char));
+                n = _char(va_arg(ap, char));
                 break;
             case 's':
-                _string(va_arg(ap, char*));
+                n = _string(va_arg(ap, char*));
                 break;
             case 'd':
-                _int(va_arg(ap, int), 1, 10);
+                n = _int(va_arg(ap, int), 1, 10);
                 break;
             case 'u':
-                _int(va_arg(ap, int), 0, 10);
+                n = _int(va_arg(ap, int), 0, 10);
                 break;
             case 'x':
-                _int(va_arg(ap, int), 0, 16);
+                n = _int(va_arg(ap, int), 0, 16);
                 break;
             case 'p':
                 putchar('0');
                 putchar('x');
-                _int(va_arg(ap, int), 0, 16);
+                n = _int(va_arg(ap, int), 0, 16) + 2;
                 break;
             default:
                 break;
             }
+
+            if (widbuf_ptr != widbuf) {
+                int wid = str2uint(widbuf);
+                int pad = wid - n;
+                for (int i = 0; i < pad; i++)
+                    putchar(' ');
+                widbuf_ptr = widbuf;
+            }
+
             state = REGULAR;
+            break;
         }
     }
     va_end(ap);

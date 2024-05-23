@@ -1,6 +1,8 @@
 #include <types.h>
 #include <pio.h>
 #include <printf.h>
+#include <pci.h>
+#include <assert.h>
 //
 // Concepts:
 // PCI device, PCI controller, port mapped i/o
@@ -33,13 +35,11 @@
 //
 #define mkaddr(enable, bus, dev, func, off) \
     ((((enable) & 1) << 31) | (((bus) & 0xff) << 16) | \
-    (((dev) & 0x1f) << 11) | (((func) << 8) & 3) | (off))
-#define r_dword(enable, bus, dev, func, dwoff) \
-    (outl(mkaddr(enable, bus, dev, func, (dwoff << 2)), PORT_ADDR), inl(PORT_DATA))
-#define r_word(enable, bus, dev, func, woff) \
-    ((r_dword(enable, bus, dev, func, (woff >> 1)) >> ((woff & 1) * 16)) & 0xffff)
-#define r_byte(enable, bus, dev, func, boff) \
-    ((r_dword(enable, bus, dev, func, (boff >> 2)) >> ((boff & 3) * 8)) & 0xff)
+    (((dev) & 0x1f) << 11) | (((func) & 7) << 8) | (off))
+#define readbar(enable, bus, dev, func, bar_num) \
+    (outl(mkaddr(enable, bus, dev, func, (bar_num << 2)), PORT_ADDR), inl(PORT_DATA))
+#define writebar(enable, bus, dev, func, bar_num, value) \
+    (outl(mkaddr(enable, bus, dev, func, (bar_num << 2)), PORT_ADDR), outl(value, PORT_DATA))
 #define NDEV_PER_BUS 32
 #define NFUN_PER_DEV 8
 // 
@@ -67,58 +67,103 @@
 // Vendor ID 0xffff indicates device doesn't exist
 #define NULLVENDOR 0xffff
 // Read configuration registers from the *shared* configuration space
-#define r_hdr_deviceid(bus, dev, func) r_word(1, bus, dev, func, 1)
-#define r_hdr_vendorid(bus, dev, func) r_word(1, bus, dev, func, 0)
-#define r_hdr_type(bus, dev, func) r_byte(1, bus, dev, func, 14)
-#define r_hdr_class(bus, dev, func) r_byte(1, bus, dev, func, 11)
-#define r_hdr_subclass(bus, dev, func) r_byte(1, bus, dev, func, 10)
-#define r_hdr_progif(bus, dev, func) r_byte(1, bus, dev, func, 9)
+#define readvendorid(bus, dev, func) ((uint16_t)readbar(1, bus, dev, func, 0))
+#define readdeviceid(bus, dev, func) ((uint16_t)(readbar(1, bus, dev, func, 0) >> 16))
+#define readclass(bus, dev, func) ((uint8_t)(readbar(1, bus, dev, func, 2) >> 24))
+#define readsubclass(bus, dev, func) ((uint8_t)(readbar(1, bus, dev, func, 2) >> 16))
+#define readprogif(bus, dev, func) ((uint8_t)(readbar(1, bus, dev, func, 2) >> 8))
+#define readhdrtype(bus, dev, func) ((uint8_t)(readbar(1, bus, dev, func, 3) >> 16))
 // Read configuration registers from the pci2pci-*specific* configuration space
 // https://wiki.osdev.org/PCI#Configuration_Space
-#define r_hdr_pci2pci_secondarybus(bus, dev, func) r_byte(1, bus, dev, func, 25)
+#define readsecondarybus(bus, dev, func) ((uint8_t)(readbar(1, bus, dev, func, 6) >> 8))
 
-void printdev(uint8_t class, uint8_t subclass, uint8_t progif);
+// Support up to 10 pci devices
+#define NPCIDEV 10
+struct pcidev {
+    // Where to find cc registers of this device
+    int bus;
+    int dev;
+    int fun;
+    // Buffered cc registers
+    uint16_t vendorid;
+    uint16_t deviceid;
+    uint8_t class;
+    uint8_t subclass;
+    uint8_t progif;
+    uint8_t _;
+};
 
+static int npcidev = 0;
+static struct pcidev pcidevs[NPCIDEV];
+
+// 
 // Scan pci buses and list add PCI devices detected
 // This scan is recursive cus PCI devices can from a tree structure and have secondary buses
 // as in the case of having a PCI to PCI bridge.
-//
-void scan(uint8_t bus)
+// 
+void pci_scan(uint8_t bus)
 {
+    printf("%8s%8s%8s%16s\n", "bus", "dev", "fun", "vendor:device");
     for (int dev = 0; dev < NDEV_PER_BUS; dev++) {
         // Device doesn't exist if vendor id read from
         // the configuration space of its function 0 is 0xffff
-        uint16_t vendor = r_hdr_vendorid(bus, dev, 0);
+        uint16_t vendor = readvendorid(bus, dev, 0);
         if (vendor == NULLVENDOR)
              continue;
-        uint16_t deviceid = r_hdr_deviceid(bus, dev, 0);
+        uint16_t deviceid = readdeviceid(bus, dev, 0);
         // Test the multi-function bit in function 0's header,
         // and we don't bother checking other functions than function 0
         // if not set.
-        int nfun = (r_hdr_type(bus, dev, 0) & (1 << 7)) ? NFUN_PER_DEV : 1;
+        int nfun = (readhdrtype(bus, dev, 0) & (1 << 7)) ? NFUN_PER_DEV : 1;
         for (int fun = 0; fun < nfun; fun++) {
-            if (r_hdr_vendorid(bus, dev, 0) == NULLVENDOR)
+            if (readvendorid(bus, dev, fun) == NULLVENDOR)
                 continue;
             // Check if this function is PCI to PCI bridge,
             // and if it is we need to retrieve the secondary PCI bus ID
             // from it. This is where the optimization comes in - you scan as many
             // bus as there are rather than "brutal force" scan over all 256 possible buses!
-            uint8_t class = r_hdr_class(bus, dev, fun);
-            uint8_t subclass = r_hdr_subclass(bus, dev, fun);
-            uint8_t progif = r_hdr_progif(bus, dev, fun);
-            printf("device id:%x device:%d function:%d vendor:%x class:%x subclass:%x\n", deviceid, dev, fun, vendor, class, subclass);
+            uint8_t class = readclass(bus, dev, fun);
+            uint8_t subclass = readsubclass(bus, dev, fun);
+            uint8_t progif = readprogif(bus, dev, fun);
+            pcidevs[npcidev].bus = bus;
+            pcidevs[npcidev].dev = dev;
+            pcidevs[npcidev].fun = fun;
+            pcidevs[npcidev].vendorid = vendor;
+            pcidevs[npcidev].deviceid = deviceid;
+            pcidevs[npcidev].class = class;
+            pcidevs[npcidev].subclass = subclass;
+            pcidevs[npcidev].progif = progif;
+            npcidev++;
+            if (fun) deviceid = readdeviceid(bus, dev, fun);
+            printf("%8d%8d%8d%x:%x\n", bus, dev, fun, vendor, deviceid);
             if (class == PCI_CLASS_BRIDGE &&
                 subclass == PCI_SUBCLASS_PCI2PCI) {
                 // PCI to PCI bridge function detected. Start recursion!
-                uint8_t secondarybus = r_hdr_pci2pci_secondarybus(bus, dev, fun);
-                scan(secondarybus);
+                uint8_t secondarybus = readsecondarybus(bus, dev, fun);
+                pci_scan(secondarybus);
             }
         }
     }
 }
 
-void printdev(uint8_t class, uint8_t subclass, uint8_t progif) {
-    if (class == PCI_CLASS_STORAGE) {
-        
+int pci_get_dev(uint8_t class, uint8_t subclass, uint8_t progif) {
+    for (int i = 0; i < npcidev; i++) {
+        struct pcidev* p = &pcidevs[i];
+        if (class == p->class && subclass == p->subclass && 
+            progif == p->progif)
+            return i;
     }
+    return -1;
+}
+
+void pci_write_dev(int dev, int bar, uint32_t data) {
+    assert(dev < npcidev);
+    struct pcidev* p = &pcidevs[dev];
+    writebar(1, p->bus, p->dev, p->fun, bar, data);
+}
+
+uint32_t pci_read_dev(int dev, int bar, uint32_t data) {
+    assert(dev < npcidev);
+    struct pcidev* p = &pcidevs[dev];
+    return readbar(1, p->bus, p->dev, p->fun, bar);
 }

@@ -18,12 +18,17 @@ typedef char *va_list;
 // [ ReturnAddr ]
 //
 
+// gcc promotes any arguments smaller than an int to an int
+// So we must comply to that when retrieving the arguments from the stack
+#define	__va_promote(x) \
+	(((sizeof(x) + sizeof(int) - 1) / sizeof(int)) * sizeof(int))
+
 // Initialize 'ap' with 'last,' where 'last' is the first argument pushed onto the stack
 // and thus is at the lowest address. Take the arguably most commonly used example,
 // printf(char *s, ...), where 'last' would be 's'. 'ap' is of type 'va_list',
 // aka. char*.
 #define va_start(ap, last) \
-    (ap = (char *)&last + sizeof(last))
+    (ap = (char *)&last + __va_promote(last))
 
 // Grab one argument from the argument list at 'ap' -
 // move 'ap' up in the argument list by sizeof(type) and "return"
