@@ -156,13 +156,13 @@ int pci_get_dev(uint8_t class, uint8_t subclass, uint8_t progif) {
     return -1;
 }
 
-void pci_write_dev(int dev, int bar, uint32_t data) {
+void pci_write(int dev, int bar, uint32_t data) {
     assert(dev < npcidev);
     struct pcidev* p = &pcidevs[dev];
     writebar(1, p->bus, p->dev, p->fun, bar, data);
 }
 
-uint32_t pci_read_dev(int dev, int bar, uint32_t data) {
+uint32_t pci_read(int dev, int bar) {
     assert(dev < npcidev);
     struct pcidev* p = &pcidevs[dev];
     return readbar(1, p->bus, p->dev, p->fun, bar);
