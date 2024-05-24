@@ -45,6 +45,13 @@ static int _int(int x, int sign, int base) {
     return n;
 }
 
+static int _two(int x) {
+    int n = 0;
+    for (; x; x >>= 1, n++)
+        putchar(x & 1 ? '1' : '0');
+    return n;
+}
+
 // Supports %d %x %p %c %s
 // Additionally supports width specifiers:
 // %10d constructs an output space that's 10 characters wide
@@ -105,6 +112,8 @@ void printf(char *s, ...) {
                 putchar('x');
                 n = _int(va_arg(ap, int), 0, 16) + 2;
                 break;
+            case 't':
+                n = _two(va_arg(ap, int));
             default:
                 break;
             }

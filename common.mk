@@ -14,7 +14,7 @@ FLAGS_CC = -nostdinc \
 	-fno-aggressive-loop-optimizations \
 	-g -gstrict-dwarf -O0 -m32 \
 	-Wno-unused-variable -Wno-unused-function \
-	-c \
+	-c -mno-sse \
 
 LD = x86_64-elf-ld
 CC = x86_64-elf-gcc
