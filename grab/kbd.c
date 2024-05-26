@@ -1,5 +1,7 @@
 #include "kbd.h"
 #include <types.h>
+#include <pio.h>
+#include <printf.h>
 
 
 // Intel 8042 ps/2 controller data port
@@ -312,6 +314,34 @@ int readline(char *buf, int len)
     }
 
     return index;
+}
+
+#define PS2_DATA_PORT 0x60
+#define PS2_STATUS_PORT 0x64
+
+int keyboard_has_data() {
+    return inb(PS2_STATUS_PORT) & 1;
+}
+
+uint8_t keyboard_read() {
+    while (!keyboard_has_data());
+    return inb(PS2_DATA_PORT);
+}
+
+int kbd_test_polling(){
+    uint8_t scancode;
+    while (1) {
+        scancode = keyboard_read();
+        key_event_t event = parse_scancode(scancode);
+        kbd.driver_index = (kbd.driver_index + 1) % BUFFER_SIZE;
+
+        if (TO_STRUCT(event).hasdata) {
+            uint8_t data = TO_STRUCT(event).data;
+            if (isprint(data) || data == '\n' || data == '\b') {
+                return apply_shift(data, event);
+            }
+        }
+    }
 }
 
 // // This imeplementation overwirtes the old data if the driver is not keeping up

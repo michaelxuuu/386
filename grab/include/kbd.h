@@ -104,5 +104,6 @@ enum nonprintable_keys {
 // void *keyboard_isr(struct icontext * c);
 int readchar(void);
 int readline(char *buf, int len);
+int kbd_test_polling();
 
 #endif

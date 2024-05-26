@@ -3,6 +3,8 @@
 #include <pci.h>
 #include <printf.h>
 #include <panic.h>
+#include <kbd.h>
+
 
 void start2(int pcimod) __attribute__((section(".text.start2")));
 
@@ -26,4 +28,7 @@ void start2(int pcimod) {
         panic("ide: channl 2: pci native mode: unsupported");
     if ((h.progif & (1 << 7)))
         printf("ide: DMA supported\n");
+
+    // kbd polling test
+    while(1) printf("%c", kbd_test_polling());
 }
