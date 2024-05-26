@@ -1,5 +1,4 @@
 #include "kbd.h"
-#include <asm.h>
 #include <types.h>
 
 
