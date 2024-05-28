@@ -46,7 +46,7 @@ vhd:
 
 mkvhd.2: $(PATH_MKFS)/*.c $(PATH_FS)/*.c | mkfs
 # create a file system on vhd
-	echo "quit" | $(PATH_MKFS)/mkfs vhd 1
+	echo "mkdir /boot\n mkdir /home\n quit" | $(PATH_MKFS)/mkfs vhd 1
 	touch $@
 
 mkvhd.3: $(PATH_GRAB)/*.c | grab

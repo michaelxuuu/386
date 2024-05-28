@@ -4,8 +4,8 @@
     #include <stdlib.h>
     #include <string.h>
 #elif defined(BUILD_TARGET_386)
-    #include <util.h>
     #include <types.h>
+    #include <util.h>
 #else
     #error "BUILD_TARGET undefined"
 #endif
@@ -554,7 +554,6 @@ int fs_unlink(char *path) {
 int fs_link(char *new, char *old) {
     uint32_t n;
     uint32_t nn;
-    uint32_t off;
     struct dinode di;
     struct dirent de;
     char name[MAXNAME];
@@ -587,7 +586,7 @@ int fs_link(char *new, char *old) {
     // the same inode number as "old"
     de.inum = nn;
     strncpy(de.name, name, MAXNAME);
-    if (inode_write(n, &de, sizeof de, off) != sizeof de) {
+    if (inode_write(n, &de, sizeof de, di.size) != sizeof de) {
         fs.printf("fs_link: %s: dir write failed\n", parent);
         return -1;
     }

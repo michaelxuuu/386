@@ -4,8 +4,29 @@
 #include <printf.h>
 #include <panic.h>
 #include <ide.h>
+#include <fs.h>
+#include <assert.h>
+#include <inc.h>
 
 void start2(int pcimod) __attribute__((section(".text.start2")));
+
+void do_ls(char *path) {
+    uint32_t inum = fs_lookup(path);
+    if (inum == NULLINUM) {
+        printf("ls: %s: No such file or directory\n", path);
+        return;
+    }
+    uint32_t off = 0;
+    for (;;) {
+        struct dirent d;
+        uint32_t n = inode_read(inum, &d, sizeof d, off);
+        if (!n)
+            break;
+        if (d.inum)
+            printf("%s\n", d.name);
+        off += sizeof d;
+    }
+}
 
 void start2(int pcimod) {
     printf("probing pci devices...\n");
@@ -29,4 +50,8 @@ void start2(int pcimod) {
         printf("ide: DMA supported\n");
     ide_init();
     ide_list();
+    ide_sel(0);
+    struct partition *partitions = ide_get_partitions(0);
+    assert(!fs_init(&partitions[0], ide_read, ide_write, (printfunc)printf));
+    do_ls("/");
 }
