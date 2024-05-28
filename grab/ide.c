@@ -27,9 +27,10 @@
 // IBM 5170 has 2 IDE channels, each supporting up 2 drives
 // yielding 4 drives in total
 static struct {
-    int p;
-    int mbr;
-    struct partition ptbl[4];
+    int present;
+    int ismsods;
+    int nsector;
+    struct partition partitions[4];
 } ide[2][2];
 
 static int drive_sel = 0;
@@ -44,7 +45,7 @@ static int channel_sel = 0;
 #define PORT_SECTOR     0x3
 #define PORT_SYLLOW     0x4
 #define PORT_SYLHIGH    0x5
-#define PORT_DRIVE_HEAD 0x6
+#define PORT_SEL 0x6
 #define PORT_STATUS     0x7
 #define PORT_COMMAND    PORT_STATUS
 
@@ -78,41 +79,12 @@ static int channel_sel = 0;
 #define MAXLBA (255 * 63 * 1024)
 
 // Convert the lba address to chs address
-static uint32_t lba_to_chs(int lba)
+static uint32_t tochs(int lba)
 {
     uint32_t c = (lba / 63) / 255;
     uint32_t h = (lba / 63) % 255;
     uint32_t s = lba % 63 + 1;
     return (c | h << 16 | s << 24);
-}
-
-// Check the presence of 'drive' on 'channel'
-// Drive can only be either 0 or 1
-static int drive_present(int channel, int drive)
-{
-    int base = !channel ? PRIMARY_BASE : SECONDARY_BASE;
-    // Ask the IDE controller to select the specified channel and drive
-    outb(0xa0 | (drive << 4), base + PORT_DRIVE_HEAD);
-    for (int i = 0; i < 1000; i++)
-        // Read the status register 1000 times
-        // We should at least see some bits getting set during this
-        if (inb(base + PORT_STATUS))
-            return 1;
-    return 0;
-}
-
-static void info_drive(int channel, int drive)
-{
-    int drivenum = drive + channel + (channel ? 1 : 0);
-    if (!ide[channel][drive].p)
-        return;
-    if (!ide[channel][drive].mbr) {
-        printf("(hd%d) ", drivenum);
-        return;
-    }
-    for (int i = 0; i < 4; i++)
-        if (ide[channel][drive].ptbl[i].nsectors)
-            printf("(hd%d, msdos%d) ", drivenum, i);
 }
 
 // Used internally to read and write drives based on *explicit* channel and drive selections ("abs"). 
@@ -127,73 +99,25 @@ static void ide_rw_abs(int n, void *buf, int w, int channel, int drive)
     // Has an error occured in the previous request we waited for?
     if ((status & (STATUS_ERR | STATUS_WRERR)))
         panic("Disk error!");
-    uint32_t chs = lba_to_chs(n);
+    uint32_t chs = tochs(n);
     outb(1, base + PORT_SECCNT);
     outb((uint8_t)(chs >> 24), base + PORT_SECTOR);
     outb((uint8_t)(chs), base + PORT_SYLLOW);
     outb((uint8_t)(chs >> 8), base + PORT_SYLHIGH);
-    outb(0xa0 | (drive << 4) | (uint8_t)(chs >> 16), base + PORT_DRIVE_HEAD);
+    outb(0xa0 | (drive << 4) | (uint8_t)(chs >> 16), base + PORT_SEL);
     if (w) {
         outb(CMD_WRSECT, base + PORT_COMMAND);
-        for (int i = 0; i < BLOCKSIZE / 4; i++) {
-            while ((status = inb(base + PORT_STATUS) & (STATUS_READY | STATUS_BUSY)) != STATUS_READY);
-            outl(((uint32_t *)buf)[i], base + PORT_DATA);
-        }
+        // The first sector may be written to the buffer *immediately* 
+        // after the command has been sent, and data request is active.
+        outsl(buf, base + PORT_DATA, BLOCKSIZE / 4);
     } else {
         outb(CMD_RDSECT, base + PORT_COMMAND);
-        for (int i = 0; i < BLOCKSIZE / 4; i++) {
-            while ((status = inb(base + PORT_STATUS) & (STATUS_READY | STATUS_BUSY)) != STATUS_READY);
-            ((uint32_t *)buf)[i] = inl(base + PORT_DATA);
-        }
+        // Need to wait until the controller is ready!
+        // This is usually done in the IRQ14 handler, but we can do it here
+        // cus the CPU doesn't have much else to do anyway when running the bootloader.
+        while ((status = inb(base + PORT_STATUS) & (STATUS_READY | STATUS_BUSY)) != STATUS_READY);
+        insl(base + PORT_DATA, buf, BLOCKSIZE / 4);
     }
-}
-
-static void init_drive(int channel, int drive) {
-    union block b;
-    ide[channel][drive].p = 1;
-    ide_rw_abs(0, &b, 0, channel, drive);
-    // Check for the MBR magic
-    if (*(uint16_t *)&b.bytes[510] != 0xaa55) {
-        ide[channel][drive].mbr = 0;
-        return;
-    }
-    ide[channel][drive].mbr = 1;
-    // Read the partition table from the MBR
-    struct partition *p = (struct partition *)(&b.bytes[510] - sizeof (*p) * 4);
-    for (int i = 0; i < 4; i++, p++)
-        ide[channel][drive].ptbl[i] = *p;
-}
-
-// Users of the IDE module have to specifiy their selection
-// of the channel and drive before any IDE functions can
-// be called to avoid undetermined behavior.
-void ide_sel(int channel, int drive) {
-    drive_sel = drive;
-    channel_sel = channel;
-}
-
-// Return the partition based on the *current* channel and drive selection.
-void ide_get_partition(int num, struct partition *p) {
-    *p = ide[channel_sel][drive_sel].ptbl[num];
-}
-
-// Prob IDE drives and record their presence and partitions
-void ide_init()
-{
-    // Check the presence of drives on each IDE channel
-    for (int channel = 0; channel < 2; channel++)
-        for (int drive = 0; drive < 2; drive++)
-            if (drive_present(channel, drive))
-                init_drive(channel, drive);
-}
-
-void ide_list() {
-    for (int channel = 0; channel < 2; channel++)
-        for (int drive = 0; drive < 2; drive++) {
-                info_drive(channel, drive);
-                printf(" ");
-            }
-    printf("\n");
 }
 
 static void ide_rw(int n, void *buf, int w) 
@@ -201,12 +125,81 @@ static void ide_rw(int n, void *buf, int w)
     ide_rw_abs(n, buf, w, channel_sel, drive_sel);
 }
 
+// Prob IDE drives and record their presence and partitions
+void ide_init()
+{
+    // Check the presence of drives on each IDE channel
+    for (int x = 0; x < 4; x++) {
+        union block b;
+        struct partition *p = \
+            (struct partition *)(&b.bytes[510] - (sizeof (*p) << 2));
+        int channel = x >> 1;
+        int drive = x & 1;
+        int base = !channel ? PRIMARY_BASE : SECONDARY_BASE;
+        int retry_cnt = 1000;
+        int nsector = 0;
+        outb(0xa0 | (drive << 4), base + PORT_SEL);
+        for (; retry_cnt > 0 && !inb(base + PORT_STATUS); retry_cnt--);
+        if (!retry_cnt)
+            continue;
+        ide[channel][drive].present = 1;
+        ide[channel][drive].ismsods = 0;
+        ide_rw_abs(0, &b, 0, channel, drive);
+        if (*(uint16_t *)&b.bytes[510] != 0xaa55)
+            continue;
+        ide[channel][drive].ismsods = 1;
+        for (int i = 0; i < 4; i++, p++) {
+            ide[channel][drive].nsector += p->nsectors;
+            ide[channel][drive].partitions[i] = *p;
+        }
+    }
+}
+
+void ide_list()
+{
+    for (int x = 0; x < 4; x++) {
+        int channel = x >> 1;
+        int drive = x & 1;
+        if (!ide[channel][drive].present)
+            continue;
+        if (!ide[channel][drive].ismsods) {
+            printf("(hd%d, ?)", x);
+            continue;
+        }
+        for (int y = 0; y < 4; y++) {
+            if (!ide[channel][drive].partitions[y].nsectors)
+                continue;
+            printf("(hd%d, msdos%d) ", x, y);
+        }
+    }
+    printf("\n");
+}
+
+// Users of the IDE module have to specifiy their selection
+// of the channel and drive before any IDE functions can
+// be called to avoid undetermined behavior.
+// "drivenum" can be 1, 2, 3, and 4.
+void ide_sel(int drivenum) {
+    drive_sel = drivenum & 1;
+    channel_sel = drivenum >> 1;
+}
+
+// Return a pointer to the partition table of the currrent drive
+// based on the *current* channel and drive selection.
+struct partition *ide_get_partitions(int num) {
+    return ide[channel_sel][drive_sel].partitions;
+}
+
 void ide_write(int n, void *buf)
-{   
+{
+    if (n >= ide[channel_sel][drive_sel].nsector)
+        panic("Trying to read nonexistent sector");
     ide_rw(n, buf, 1);
 }
  
 void ide_read(int n, void *buf)
 {
+    if (n >= ide[channel_sel][drive_sel].nsector)
+        panic("Trying to write nonexistent sector");
     ide_rw(n, buf, 0);
 }

@@ -75,9 +75,9 @@ void printf(char *s, ...) {
             s++;
             break;
         case SPECIFIER:
+            widbuf_ptr = widbuf;
             if (isdigit(*s)) {
                 state = WIDTH_SPECIFIER;
-                widbuf_ptr = widbuf;
             } else if (*s)
                 state = TYPE_SPECIFIER;
             break;
