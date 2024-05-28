@@ -177,7 +177,7 @@ void ide_get_partition(int num, struct partition *p) {
     *p = ide[channel_sel][drive_sel].ptbl[num];
 }
 
-// Prob all drives a
+// Prob IDE drives and record their presence and partitions
 void ide_init()
 {
     // Check the presence of drives on each IDE channel
@@ -187,9 +187,7 @@ void ide_init()
                 init_drive(channel, drive);
 }
 
-// Prob IDE drives and record their presence and partitions
 void ide_list() {
-    // Check the presence of drives on each IDE channel
     for (int channel = 0; channel < 2; channel++)
         for (int drive = 0; drive < 2; drive++) {
                 info_drive(channel, drive);
