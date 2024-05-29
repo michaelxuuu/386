@@ -1,6 +1,8 @@
 -include ../common.mk
 
-mkfs: mkfs.c $(PATH_FS)/fs.c
+INCLUDE = -I../kernel/include -I../fs/
+
+mkfs: mkfs.c ../fs/fs.c
 	gcc -DBUILD_TARGET_HOST $(INCLUDE) $^ -g -o $@
 
 clean:

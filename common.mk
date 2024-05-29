@@ -1,8 +1,3 @@
-PATH_KERNEL = ../kernel
-PATH_FS = ../fs
-PATH_MKFS = ../mkfs
-PATH_GRAB = ../grab
-INCLUDE = -I$(PATH_FS) -I$(PATH_GRAB)/include -I$(PATH_KERNEL)/include
 FLAGS_LD = -g -static --fatal-warnings -melf_i386
 FLAGS_CC = -nostdinc \
 	-fno-strict-aliasing -fno-builtin -fno-stack-protector -fno-omit-frame-pointer \
