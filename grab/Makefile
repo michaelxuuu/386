@@ -1,7 +1,9 @@
 -include ../common.mk
 
-SRC_STAGE2 = $(wildcard *.c $(PATH_FS)/*.c)
+SRC_STAGE2 = $(wildcard *.c ../fs/*.c)
 OBJ_STAGE2 = $(SRC_STAGE2:.c=.o)
+
+INCLUDE = -I../kernel/include -I../fs/ -I../grab/include
 
 all: stage1.bin stage2.bin stage1.elf stage2.elf
 

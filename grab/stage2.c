@@ -6,7 +6,7 @@
 #include <ide.h>
 #include <fs.h>
 #include <assert.h>
-#include <inc.h>
+#include <fs-api.h>
 
 void start2(int pcimod) __attribute__((section(".text.start2")));
 
@@ -41,17 +41,18 @@ void start2(int pcimod) {
     if (!(h.progif & (1 << 0)))
         printf("ide: channel 1: compatibility mode\n");
     else
-        panic("ide: channl 1: pci native mode: unsupported");
+        panic("ide: channl 1: pci native mode: unsupported\n");
     if (!(h.progif & (1 << 2)))
         printf("ide: channel 2: compatibility mode\n");
     else
-        panic("ide: channl 2: pci native mode: unsupported");
+        panic("ide: channl 2: pci native mode: unsupported\n");
     if ((h.progif & (1 << 7)))
         printf("ide: DMA supported\n");
     ide_init();
     ide_list();
     ide_sel(0);
     struct partition *partitions = ide_get_partitions(0);
-    assert(!fs_init(&partitions[0], ide_read, ide_write, (printfunc)printf));
+    assert(!fs_init(&partitions[0], ide_read_lba, ide_write_lba, (printfunc)printf));
     do_ls("/");
 }
+

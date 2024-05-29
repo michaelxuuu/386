@@ -10,8 +10,8 @@
     #error "BUILD_TARGET undefined"
 #endif
 
-#include "../kernel/include/fs.h"
-#include "inc.h"
+#include <fs.h>
+#include <fs-api.h>
 
 #define MAXPATH 64
 

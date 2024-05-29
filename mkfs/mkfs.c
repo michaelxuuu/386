@@ -11,7 +11,7 @@
 #include <sys/wait.h>
 
 #include <fs.h>
-#include <inc.h>
+#include <fs-api.h>
 
 #define min(x, y) (x < y ? x : y)
 #define max(x, y) (x > y ? x : y)
