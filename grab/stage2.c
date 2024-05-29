@@ -3,6 +3,7 @@
 #include <pci.h>
 #include <printf.h>
 #include <panic.h>
+#include <kbd.h>
 #include <ide.h>
 #include <fs.h>
 #include <assert.h>
@@ -54,5 +55,7 @@ void start2(int pcimod) {
     struct partition *partitions = ide_get_partitions(0);
     assert(!fs_init(&partitions[0], ide_read_lba, ide_write_lba, (printfunc)printf));
     do_ls("/");
+    // kbd polling test
+    while(1) printf("%c", kbd_test_polling());
 }
 
