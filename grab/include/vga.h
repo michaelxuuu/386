@@ -28,5 +28,12 @@
 
 #define BLINK      0x80 /* Annoying. */
 
-void putchar(char c);
 void vga_reset();
+uint16_t vga_get_cursor();
+void vga_set_cursor(uint16_t off);
+void vga_clear(int start, int end);
+void vga_putchar(uint16_t off, uint8_t c, uint8_t color);
+uint16_t vga_scroll(uint16_t off);
+void vga_set_color(int row, uint8_t color);
+void vga_show_cursor();
+void vga_hide_cursor();

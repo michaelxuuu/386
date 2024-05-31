@@ -1,9 +1,13 @@
 void *memcpy(void *dest, void *src, int n);
 void *memset(void *p, int c, int len);
 int strcmp(char *s1, char *s2);
-int strnlen(char *s, int n) ;
+int strncmp(char *s1, char *s2, int n);
 int strlen(char *s);
+int strnlen(char *s, int n);
+void strcpy(char *dest, char *src);
 char *strncpy(char *dest, char *src, int n);
 int isdigit(char c);
 int isdigit(char c);
 uint32_t str2uint(char *s);
+int isprint(char c);
+int isspace(int c);

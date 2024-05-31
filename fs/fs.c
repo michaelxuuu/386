@@ -21,7 +21,7 @@
 // and confusing bugs caused by compiler overrides without notification. 
 // It also mitigates conflicts with global names; for example, a function
 // named fs.disk_read() in another C file won't conflict with fs.fs.disk_read.
-// Of course, the use of the 'static' directive can do that.
+// Of course, the use of the 'static' directive can also do that.
 static struct {
     int init;
     struct superblock su;
@@ -598,7 +598,7 @@ int fs_link(char *new, char *old) {
 }
 
 int fs_init(struct partition *p, diskfunc rfunc, diskfunc wfunc, printfunc pfunc) {
-    if (fs.init || !rfunc || !wfunc || !pfunc)
+    if (!rfunc || !wfunc || !pfunc)
         return -1;
     fs.disk_read = rfunc;
     fs.disk_write = wfunc;

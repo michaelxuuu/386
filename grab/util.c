@@ -60,6 +60,13 @@ int strncmp(char *s1, char *s2, int n) {
         return -1;
 }
 
+void strcpy(char *dest, char *src)
+{
+    for (; *src; src++, dest++)
+        *dest = *src;
+    *dest = 0;
+}
+
 void *memset(void *p, int c, int len) {
     char *pp = p;
     for (int i = 0; i < len; i++)
@@ -100,4 +107,14 @@ uint32_t str2uint(char *s) {
     for (int i = 0; i < ndigits; i++, base /= 10)
         x += (s[i] - '0') * base;
     return x;
+}
+
+int isprint(int c)
+{
+	return ((c) >= ' ') && ((c) <= 126);
+}
+
+int isspace(int c)
+{
+    return c == '\t' || c == ' ';
 }

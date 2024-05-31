@@ -3,6 +3,40 @@
 #include <arg.h>
 #include <util.h>
 
+static uint8_t color = 0;
+
+void printf_set_color(uint8_t c)
+{
+    color = c;
+}
+
+// Print one char at the current cursor position and scroll if necessary
+static void putchar(char c)
+{
+    int off = vga_get_cursor();
+    switch (c)
+    {
+    case '\n':
+    case '\r':
+        off = off + 80 - off % 80;
+        break;
+    case '\b':
+        if (off != 0)
+            vga_putchar(--off, ' ', color);
+        break;
+    case '\t':
+        off += 4;
+        break;
+    default:
+        vga_putchar(off++, c, color);
+        break;
+    }
+    // Any increment of off may cause it to overflow the text buffer.
+    // We must scroll down in case of overflow.
+    // Luckily, we always scroll down by 1 row.
+    vga_set_cursor(vga_scroll(off));
+}
+
 static char *digits = "0123456789abcdef";
 
 static int _char(char c) {
@@ -12,6 +46,9 @@ static int _char(char c) {
 
 static int _string(char *s) {
     int l = 0;
+    // Must ensure kernel printf is safe!
+    if (!s)
+        return l;
     // Cap the max string length to 1K
     // The rest of the string would be dropped!
     while (*s && l < (1<<10)) {

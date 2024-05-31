@@ -178,35 +178,22 @@ void ide_init()
     }
 }
 
-void ide_list()
-{
-    for (int x = 0; x < 4; x++) {
-        int channel = x >> 1;
-        int drive = x & 1;
-        if (!ide.drives[x].exist)
-            continue;
-        if (!ide.drives[x].msdos) {
-            printf("(hd%d, ?) ", x);
-            continue;
-        }
-        for (int y = 0; y < 4; y++)
-            if (ide.drives[x].partitions[y].nsectors)
-                printf("(hd%d, msdos%d) ", x, y);
-    }
-    printf("\n");
-}
-
 // Users of the IDE module have to specifiy their selection
 // of the channel and drive before any IDE functions can
 // be called to avoid undetermined behavior.
 // "drivenum" can be 1, 2, 3, and 4.
-void ide_sel(int drivenum) {
+int ide_sel(int drivenum) {
+    if (!ide.drives[drivenum].exist)
+        return -1;
     ide.drive_sel = drivenum & 1;
+    return 0;
 }
 
 // Return a pointer to the partition table of the currrent drive
 // based on the *current* channel and drive selection.
-struct partition *ide_get_partitions(int num) {
+struct partition *ide_get_partitions() {
+    if (!ide.drives[ide.drive_sel].msdos)
+        return 0;
     return ide.drives[ide.drive_sel].partitions;
 }
 

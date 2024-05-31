@@ -1,8 +1,6 @@
 #ifndef _kbd_h_
 #define _kbd_h_
 
-#include <types.h>
-
 // Max ascii code
 #define MAX_ASCII 127
 
@@ -27,8 +25,8 @@ struct keyboard_state {
 // A key event struct returned to the user routines of the keyboard driver
 // encompassing comprehensive information of a keyboard event
 struct key_event {
-        // Valid for read if the key has an ascii representation
-        // regardless of whether it's printable or not, or if it is useful
+        // Valid for reading if the key has an ascii representation
+        // regardless of whether it's printable or not or useful
         // to the user routine
         uint8_t data;
         // Valid for reading if the 'hasraw' field is set to 1,
@@ -40,7 +38,7 @@ struct key_event {
         // Set to 1 if the event is from the keypad
         uint8_t keypad : 1;
         // Set to 1 if the scan code can be mapped to an data code
-        // and make is set to 1 (data data is offered at key press not release)
+        // and make is set to 1 (data code is offered at key press not release)
         uint8_t hasdata : 1;
         // Set to 1 if the ps/2 data is not interrpretable, even as a modifier key
         uint8_t hasraw : 1;
@@ -52,6 +50,13 @@ struct key_event {
         // (left or right) modifier key it is, eliminating any ambiguity.
         struct keyboard_state kbdstate;
 } __attribute__((packed));
+
+// The compiler treats the 32-bit bit field differently from an 32-bit integer
+// and returns the struct using the stack instead of %eax, so we need to
+// make adjustments to handle this behavior
+typedef uint32_t key_event_t;
+
+#define TO_STRUCT(x) (*(struct key_event *)&(x))
 
 // Here are the encodings (enumerations) of the keyboard keys.
 // Only the nonprintable keys are encoded while the
@@ -101,9 +106,7 @@ enum nonprintable_keys {
         KEY_CAPS,
 };
 
-// void *keyboard_isr(struct icontext * c);
-int readchar(void);
-int readline(char *buf, int len);
-int kbd_test_polling();
+key_event_t kbd_poll_event();
+char apply_shift(char c, key_event_t event);
 
 #endif

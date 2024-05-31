@@ -1,11 +1,14 @@
-#include "kbd.h"
 #include <types.h>
+#include <kbd.h>
 #include <pio.h>
 #include <printf.h>
 
 
 // Intel 8042 ps/2 controller data port
-#define DATA_PORT 0x60
+#define PORT_DATA 0x60
+#define PORT_STATUS 0x64
+
+#define STATUS_OUTBUF_FULL 1
 
 // Keyboard ring buffer size
 // Has to be a power of 2
@@ -17,14 +20,8 @@
 // More on Intel 8042 ps/2 controller, https://wiki.osdev.org/%228042%22_PS/2_Controller
 // More on ps/2 keyboard, https://wiki.osdev.org/PS/2_keyboard
 
-// The compiler treats the 32-bit bit field differently from an 32-bit integer
-// and returns the struct using the stack instead of %eax, so we need to
-// make adjustments to handle this behavior
-typedef uint32_t key_event_t;
-
 // Macro to convert between struct and int
 #define TO_INT(x) (*(key_event_t *)&(x))
-#define TO_STRUCT(x) (*(struct key_event *)&(x))
 
 // DFA parser states
 typedef enum {
@@ -70,9 +67,6 @@ static const uint8_t key_map[] = {
 // Global keyboard state
 typedef struct {
     struct keyboard_state state;
-    uint8_t buffer[BUFFER_SIZE];
-    uint8_t driver_index;
-    uint8_t device_index;
     parser_state_t parser_state;
     uint8_t sequence_index;
 } keyboard_t;
@@ -125,11 +119,6 @@ key_event_t raw_event(int raw)
 int is_keypad_key(uint8_t scancode)
 {
     return (0x47 <= scancode && scancode <= 0x53) || scancode == 0x37;
-}
-
-static int isprint(int c)
-{
-	return ((c) >= ' ') && ((c) <= 126);
 }
 
 // Used by the parser to alter the intrnal keyboard states
@@ -252,6 +241,9 @@ char apply_shift(char c, key_event_t event)
 {
     if (!TO_STRUCT(event).kbdstate.lshft && !TO_STRUCT(event).kbdstate.rshft)
         return c;
+    
+    if (c >= 'a' && c <= 'z')
+        c -= 32;
 
     switch (c) {
         case '`': return '~';
@@ -279,75 +271,13 @@ char apply_shift(char c, key_event_t event)
     }
 }
 
-// Read a character from the keyboard buffer
-int readchar(void)
+key_event_t kbd_poll_event()
 {
-    while (kbd.driver_index != kbd.device_index) {
-        key_event_t event = parse_scancode(kbd.buffer[kbd.driver_index]);
-        kbd.driver_index = (kbd.driver_index + 1) % BUFFER_SIZE;
-
-        if (TO_STRUCT(event).hasdata) {
-            uint8_t data = TO_STRUCT(event).data;
-            if (isprint(data) || data == '\n' || data == '\b') {
-                return apply_shift(data, event);
-            }
-        }
-    }
-
-    return -1;
+    key_event_t e;
+    do {
+        while (!(inb(PORT_STATUS) & STATUS_OUTBUF_FULL));
+        uint8_t scancode = inb(PORT_DATA);
+        e = parse_scancode(scancode);
+    } while (!TO_STRUCT(e).hasdata);
+    return e;
 }
-
-int readline(char *buf, int len)
-{
-    if (len <= 0) return -1;
-
-    int index = 0;
-    while (index < len) {
-        int c = readchar();
-        if (c == -1) continue;
-        if (c == '\b') {
-            if (index > 0) --index;
-            continue;
-        }
-        buf[index++] = c;
-        if (c == '\n') break;
-    }
-
-    return index;
-}
-
-#define PS2_DATA_PORT 0x60
-#define PS2_STATUS_PORT 0x64
-
-int keyboard_has_data() {
-    return inb(PS2_STATUS_PORT) & 1;
-}
-
-uint8_t keyboard_read() {
-    while (!keyboard_has_data());
-    return inb(PS2_DATA_PORT);
-}
-
-int kbd_test_polling(){
-    uint8_t scancode;
-    while (1) {
-        scancode = keyboard_read();
-        key_event_t event = parse_scancode(scancode);
-        kbd.driver_index = (kbd.driver_index + 1) % BUFFER_SIZE;
-
-        if (TO_STRUCT(event).hasdata) {
-            uint8_t data = TO_STRUCT(event).data;
-            if (isprint(data) || data == '\n' || data == '\b') {
-                return apply_shift(data, event);
-            }
-        }
-    }
-}
-
-// // This imeplementation overwirtes the old data if the driver is not keeping up
-// void keyboard_isr(struct icontext *c)
-// {
-//     uint8_t scan_byte = inb(DATA_PORT);
-//     kbd.buffer[kbd.device_index] = scan_byte;
-//     kbd.device_index = (kbd.device_index + 1) % BUFFER_SIZE;
-// }

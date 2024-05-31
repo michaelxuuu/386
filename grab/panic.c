@@ -1,3 +1,4 @@
+#include <types.h>
 #include <printf.h>
 
 void panic(char *s) {

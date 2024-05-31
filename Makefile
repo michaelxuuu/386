@@ -64,7 +64,7 @@ $(DRIVES): $(SRCGRAB) $(SRCMKFS) | make_grab make_mkfs
 # create a file system on all bootable drives
 	@$(foreach drive,$(BOOT_DRIVES), \
 		(echo "Formatting: $(drive)..." && \
-		echo "mkdir /boot\n mkdir /home\n quit" | $(PATHMKFS)/mkfs drive0 1 &> /dev/zero); \
+		echo "mkdir /boot\n mkdir /home\n touch /boot/fake1\n touch /boot/fake2\n quit" | $(PATHMKFS)/mkfs drive0 1 &> /dev/zero); \
 	)
 # install the grab on all bootable drives
 	@$(foreach drive,$(BOOT_DRIVES), \
