@@ -314,7 +314,7 @@ void shell()
         uint8_t data = apply_shift(TO_STRUCT(e).data, e);
 
         if (data == '\n') {
-            buf[off] = 0; // Null-terminate the command
+            buf[len] = 0; // Null-terminate the command
             printf("\n");
             process_command(buf);
             printf("grab> ");
