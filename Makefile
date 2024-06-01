@@ -7,6 +7,7 @@
 PATHMKFS 		=	./mkfs
 PATHGRAB 		=	./grab
 PATHFS   		=	./fs
+PATHKERNEL		= 	./kernel
 CONTAINER		=	fdisk
 BOOT_DRIVES 	=	drive0
 NONBOOT_DRIVES 	= 	drive1 drive2 drive3
@@ -14,8 +15,9 @@ DRIVES 			= 	$(BOOT_DRIVES) $(NONBOOT_DRIVES)
 DISK_GEO_C		= 	1
 DISK_GEO_H		= 	16
 DISK_GEO_S		= 	63
-SRCGRAB			= 	$(wildcard $(PATHGRAB)/*.c $(PATHFS)/*.c)
+SRCGRAB			= 	$(wildcard $(PATHGRAB)/*.c $(PATHGRAB)/*.S $(PATHFS)/*.c)
 SRCMKFS			= 	$(wildcard $(PATHMKFS)/*.c $(PATHFS)/*.c)
+SRCKERNEL		= 	$(wildcard $(PATHKERNEL)/*.c $(PATHKERNEL)/*.S)
 
 gdb: qemu-serial gdb-in-new-bash-session kill-qemu
 
@@ -35,7 +37,7 @@ kill-qemu:
 	pkill -9 qemu
 
 .DELETE_ON_ERROR:
-$(DRIVES): $(SRCGRAB) $(SRCMKFS) | make_grab make_mkfs
+$(DRIVES): $(SRCGRAB) $(SRCMKFS) $(SRCKERNEL) | make_grab make_mkfs make_kernel
 # create drives
 	@echo "Creating dirves: $(DRIVES)..."
 	@$(foreach drive,$(DRIVES), \
@@ -62,9 +64,13 @@ $(DRIVES): $(SRCGRAB) $(SRCMKFS) | make_grab make_mkfs
 		&& docker exec $(CONTAINER) bash -c "fdisk -x /host/$(shell pwd)/$(drive) | tail -n 2"); \
 	)
 # create a file system on all bootable drives
+	@mv $(PATHKERNEL)/kernel.bin .
 	@$(foreach drive,$(BOOT_DRIVES), \
 		(echo "Formatting: $(drive)..." && \
-		echo "mkdir /boot\n mkdir /home\n touch /boot/fake1\n touch /boot/fake2\n quit" | $(PATHMKFS)/mkfs drive0 1 &> /dev/zero); \
+		echo "mkdir /boot\n \
+			  migrate kernel.bin /boot/kernel1.bin\n \
+			  migrate kernel.bin /boot/kernel2.bin\n \
+			  quit" | $(PATHMKFS)/mkfs drive0 1 &> /dev/zero); \
 	)
 # install the grab on all bootable drives
 	@$(foreach drive,$(BOOT_DRIVES), \
@@ -77,6 +83,9 @@ docker:
 	docker run -d -it -v $(shell pwd):/host/$(shell pwd) --name $(CONTAINER) --platform linux/amd64 ubuntu:latest
 	docker exec $(CONTAINER) bash -c "apt update; apt -y install fdisk"
 
+make_kernel:
+	make -C $(PATHKERNEL)
+
 make_grab:
 	make -C $(PATHGRAB)
 
@@ -84,6 +93,7 @@ make_mkfs:
 	make -C $(PATHMKFS)
 
 clean:
-	make -C $(PATHGRAB) clean
-	make -C $(PATHMKFS) clean
-	-rm vhd *.tmp drive* vhd*
+	-make -C $(PATHGRAB) clean
+	-make -C $(PATHMKFS) clean
+	-make -C $(PATHKERNEL) clean
+	-rm vhd *.tmp drive* vhd* *.bin

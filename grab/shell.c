@@ -172,7 +172,6 @@ static void boot()
 		printf("cat: root hasn't been set\n");
 		return;
 	}
-	printf("booting from (hd%d,%d)...\n", grab.rootdrive, grab.rootpartition);
 
     uint32_t inum = fs_lookup("/boot");
 	assert(inum != NULLINUM);
@@ -180,9 +179,10 @@ static void boot()
     vga_reset();
     uint32_t off = 0;
     int cnt = 0;
+    struct dirent d;
+    int n;
     for (;;cnt++) {
-        struct dirent d;
-        int n = inode_read(inum, &d, sizeof d, off);
+        n = inode_read(inum, &d, sizeof d, off);
 		assert(n >= 0);
         if (!n)
             break;
@@ -210,7 +210,26 @@ static void boot()
             break;
         }
     }
-    
+
+    n = inode_read(inum, &d, sizeof d, row * sizeof d);
+    assert(n == sizeof d);
+    printf("booting %s...\n", d.name);
+    printf("loading system at 0x100000\n");
+
+    char *p = (char *)0x100000;
+    char buf[BLOCKSIZE];
+    off = 0;
+    for (;;) {
+        n = inode_read(d.inum, buf, BLOCKSIZE, off);
+        assert(n >= 0);
+        if (!n)
+            break;
+        memcpy(p, buf, n);
+        off += n;
+        p += BLOCKSIZE;
+    }
+
+    ((void (*)(void))0x100000)();
 }
 
 static void set(char *args)
