@@ -185,7 +185,7 @@ void ide_init()
 int ide_sel(int drivenum) {
     if (!ide.drives[drivenum].exist)
         return -1;
-    ide.drive_sel = drivenum & 1;
+    ide.drive_sel = drivenum;
     return 0;
 }
 

@@ -12,6 +12,7 @@
 
 #include <fs.h>
 #include <fs-api.h>
+#include <errno.h>
 
 #define MAXPATH 64
 
@@ -76,7 +77,7 @@ static int bitmap_free(uint32_t n)
     return 0;
 }
 
-int rw_inode(uint32_t inum, struct dinode *p, int w)
+static int rw_inode(uint32_t inum, struct dinode *p, int w)
 {
     union block b;
     if (!fs.init) {
@@ -96,14 +97,19 @@ int rw_inode(uint32_t inum, struct dinode *p, int w)
     return 0;
 }
 
-int read_inode(uint32_t inum, struct dinode *p) 
+static int read_inode(uint32_t inum, struct dinode *p) 
 {
     return rw_inode(inum, p, 0);
 }
 
-int write_inode(uint32_t inum, struct dinode *p)
+static int write_inode(uint32_t inum, struct dinode *p)
 {
     return rw_inode(inum, p, 1);
+}
+
+int fs_geti(uint32_t inum, struct dinode *p)
+{
+    return read_inode(inum, p);
 }
 
 // Given a index into the 'ptrs' array in an inode,
@@ -358,18 +364,18 @@ static int inode_rw(uint32_t inum, void *buf, int sz, uint32_t off, int w)
 // where you can have a maximum of 4GB physical memory. The largest signed integer is
 // 0xefffffff, which is half of that. Anyone sane, knowing they're programming for
 // a 32-bit system, should not create a 'buf' over that size.
-int inode_write(uint32_t inum, void *buf, int sz, uint32_t off) {
+int fs_write(uint32_t inum, void *buf, int sz, uint32_t off) {
     return inode_rw(inum, buf, sz, off, 1);
 }
 
-int inode_read(uint32_t inum, void *buf, int sz, uint32_t off) {
+int fs_read(uint32_t inum, void *buf, int sz, uint32_t off) {
     return inode_rw(inum, buf, sz, off, 0);
 }
 
 // Look up 'name' under the directory pointed to by 'inum.'
 // Return the inum of the dirent containing 'name' if found and NULLINUM (0) otherwise.
 // Write the offset of the dirent found into *poff if it's not NULL.
-uint32_t dir_lookup(uint32_t inum, char *name, uint32_t *poff)
+static uint32_t dir_lookup(uint32_t inum, char *name, uint32_t *poff)
 {
     struct dinode di;
     assert(read_inode(inum, &di) >= 0);
@@ -380,7 +386,7 @@ uint32_t dir_lookup(uint32_t inum, char *name, uint32_t *poff)
     for (int i = 0; i < di.size / sizeof(struct dirent); 
         i++, off += sizeof(struct dirent)) {
         struct dirent de;
-        assert(inode_read(inum, &de, sizeof de, off) == sizeof de);
+        assert(fs_read(inum, &de, sizeof de, off) == sizeof de);
         if (!strcmp(name, de.name)) {
             if (poff)
                 *poff = off;
@@ -483,7 +489,7 @@ uint32_t fs_mknod(char *path, uint16_t type) {
         return NULLINUM;
     // Link it to the "parent" dir.
     strncpy(de.name, name, MAXNAME);
-    if (inode_write(n, &de, sizeof de, di.size) != sizeof de) {
+    if (fs_write(n, &de, sizeof de, di.size) != sizeof de) {
         free_inode(de.inum);
         fs.printf("fs_mknod: %s: dir write failed\n", parent);
         return NULLINUM;
@@ -493,108 +499,6 @@ uint32_t fs_mknod(char *path, uint16_t type) {
     di.linkcnt++;
     write_inode(de.inum, &di);
     return de.inum;
-}
-
-// path=parent/name
-// Remove the directory entry from "parent," and decrement
-// the link count of the corresponding inode and free it
-// if the link count reaches to 0.
-int fs_unlink(char *path) {
-    uint32_t n;
-    uint32_t nn;
-    uint32_t off;
-    struct dinode di;
-    struct dirent de;
-    char name[MAXNAME];
-    char parent[MAXPATH];
-    if (!getname(path, name, parent)) {
-        fs.printf("fs_unlink: %s: Invalid path\n");
-        return -1;
-    }
-    // Parent path must points to a valid *directory* inode.
-    n = fs_lookup(parent);
-    if (n == NULLINUM) {
-        fs.printf("fs_unlink: %s: No such file or directory\n", parent);
-        return -1;
-    }
-    assert(read_inode(n, &di) >= 0);
-    if (di.type != T_DIR) {
-        fs.printf("fs_unlink: %s: Not a directory\n", parent);
-        return -1;
-    }
-    // "name" must be in the parent directory
-    nn = dir_lookup(n, name, &off);
-    if ((nn = dir_lookup(n, name, &off)) ==  NULLINUM) {
-        fs.printf("fs_unlink: %s: File doesn't exist\n", name);
-        return -1;
-    }
-    read_inode(nn, &di);
-    // Can't let non-empty directory be unlinked
-    if (di.type == T_DIR && di.size) {
-        fs.printf("fs_unlink: %s: Is a non-empty directory\n", parent);
-        return -1;
-    }
-    // Zero the directory entry found
-    memset(&de, 0, sizeof de);
-    assert(inode_write(n, &de, sizeof de, off) == sizeof de);
-    // Decrement the link count cus "name" no longer points to that inode
-    di.linkcnt--;
-    if (!di.linkcnt) {
-        // Free the inode if link count reaches 0
-        assert(free_inode(nn) >= 0);
-        return 0;
-    }
-    write_inode(nn, &di);
-    return 0;
-}
-
-// Create a "new" path that points to the same inode the "old" path points to:
-// Given old_parent/dirent{old_name, inum},
-// create new_parent/dirent{new_name, inum}
-int fs_link(char *new, char *old) {
-    uint32_t n;
-    uint32_t nn;
-    struct dinode di;
-    struct dirent de;
-    char name[MAXNAME];
-    char parent[MAXPATH];
-    if (!getname(new, name, parent)) {
-        fs.printf("fs_link: %s: Invalid path\n", new);
-        return -1;
-    }
-    // The "old" path must point a valid inode.
-    if ((nn = fs_lookup(old)) != NULLINUM) {
-        fs.printf("fs_link: %s: No such file or directory\n", old);
-        return -1;
-    }
-    // Parent path must point to a *directory* inode.
-    if ((n = fs_lookup(parent)) == NULLINUM) {
-        fs.printf("fs_link: %s: No such file or directory\n", parent);
-        return -1;
-    }
-    read_inode(n, &di);
-    if (di.type != T_DIR) {
-        fs.printf("fs_link: %s: Not a directiry\n", parent);
-        return -1;
-    }
-    // "name" must *not* be in "parent" already.
-    if (dir_lookup(n, name, 0) != NULLINUM) {
-        fs.printf("fs_link: %s: File exists\n", name);
-        return -1;
-    }
-    // Create a new directory entry with "name"
-    // the same inode number as "old"
-    de.inum = nn;
-    strncpy(de.name, name, MAXNAME);
-    if (inode_write(n, &de, sizeof de, di.size) != sizeof de) {
-        fs.printf("fs_link: %s: dir write failed\n", parent);
-        return -1;
-    }
-    // Increment the link count as now new also points to it.
-    read_inode(nn, &di);
-    di.linkcnt++;
-    write_inode(nn, &di);
-    return 0;
 }
 
 int fs_init(struct partition *p, diskfunc rfunc, diskfunc wfunc, printfunc pfunc) {

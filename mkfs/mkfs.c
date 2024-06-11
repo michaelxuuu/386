@@ -68,7 +68,7 @@ void do_ls(char *s) {
     uint32_t off = 0;
     for (;;) {
         struct dirent d;
-        uint32_t n = inode_read(inum, &d, sizeof d, off);
+        uint32_t n = fs_read(inum, &d, sizeof d, off);
         if (!n)
             break;
         if (d.inum)
@@ -104,7 +104,7 @@ void do_migrate(char *s) {
         int n = read(fd, &c, 1);
         if (!n)
             break;
-        int nn = inode_write(inum, &c, 1, off++);
+        int nn = fs_write(inum, &c, 1, off++);
         if (nn != 1)
             panic("fs error!");
     }
@@ -132,7 +132,7 @@ void do_retrieve(char *s) {
     uint32_t off = 0;
     for (;;) {
         char c;
-        int n = inode_read(inum, &c, 1, off++);
+        int n = fs_read(inum, &c, 1, off++);
         if (!n)
             break;
         write(fd, &c, 1);
@@ -174,12 +174,12 @@ void do_read(char *s, int w) {
         return;
     }
     if (w) {
-        int n = inode_write(inum, buf, min(64, sz), off);
+        int n = fs_write(inum, buf, min(64, sz), off);
         if (n != min(64, sz))
             panic("fs error");
         return;
     }
-    int n = inode_read(inum, buf, min(64, sz), off);
+    int n = fs_read(inum, buf, min(64, sz), off);
     for (int i = 0; i < n; i++) {
         if (isprint(buf[i]))
             printf("%c", buf[i]);
@@ -199,13 +199,6 @@ void do_touch(char *s) {
     if (!nextword(s, path))
         printf("usage: touch <path>\n");
     fs_mknod(path, T_REG);
-}
-
-void do_rm(char *s) {
-    char path[64];
-    if (!nextword(s, path))
-        printf("usage: rm <path>\n");
-    fs_unlink(path);
 }
 
 int main(int argc, char *argv[]) 
@@ -270,8 +263,6 @@ int main(int argc, char *argv[])
             do_mkdir(p);
         else if (!strncmp("touch", w, 5))
             do_touch(p);
-        else if (!strncmp("rm", w, 2))
-            do_rm(p);
         else if (!strncmp("quit", w, 4))
             exit(0);
         else

@@ -120,7 +120,7 @@ static void ls(char *args)
     uint32_t off = 0;
     for (;;) {
         struct dirent d;
-        int n = inode_read(inum, &d, sizeof d, off);
+        int n = fs_read(inum, &d, sizeof d, off);
 		assert(n >= 0);
         if (!n)
             break;
@@ -150,13 +150,13 @@ static void cat(char *args)
         return;
     }
 	struct dinode di;
-	assert(read_inode(inum, &di) >= 0);
+	assert(fs_geti(inum, &di) >= 0);
 	if (di.type != T_REG) {
 		printf("cat: not a regular file:\n", path);
 		return;
 	}
     for (;;) {
-        int n = inode_read(inum, buf, 64-1, off);
+        int n = fs_read(inum, buf, 64-1, off);
 		assert(n >= 0);
         off += n;
         if (n == 0)
@@ -182,7 +182,7 @@ static void boot()
     struct dirent d;
     int n;
     for (;;cnt++) {
-        n = inode_read(inum, &d, sizeof d, off);
+        n = fs_read(inum, &d, sizeof d, off);
 		assert(n >= 0);
         if (!n)
             break;
@@ -211,7 +211,7 @@ static void boot()
         }
     }
 
-    n = inode_read(inum, &d, sizeof d, row * sizeof d);
+    n = fs_read(inum, &d, sizeof d, row * sizeof d);
     assert(n == sizeof d);
     printf("booting %s...\n", d.name);
     printf("loading system at 0x100000\n");
@@ -220,7 +220,7 @@ static void boot()
     char buf[BLOCKSIZE];
     off = 0;
     for (;;) {
-        n = inode_read(d.inum, buf, BLOCKSIZE, off);
+        n = fs_read(d.inum, buf, BLOCKSIZE, off);
         assert(n >= 0);
         if (!n)
             break;
@@ -273,7 +273,7 @@ static void set(char *args)
 
 		// /boot must be a non-empty directory
 		struct dinode di;
-		assert(read_inode(inum, &di) >= 0);
+		assert(fs_geti(inum, &di) >= 0);
 		if (di.type != T_DIR) {
 			printf("set: /boot is not a directoy\n");
 			return;
