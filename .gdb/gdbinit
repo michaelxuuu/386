@@ -48,3 +48,9 @@ break *0x90000 + d
 continue
 symbol-file grab/stage2.elf
 break start2
+# Below is to debug the kernel code running in PM
+symbol-file kernel/kernel.elf
+# qemu breaks at cs(base) + ip so we add 0x40100000 to count for
+# the address wrap-around
+break *0x40100000 + kmain
+

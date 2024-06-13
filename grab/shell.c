@@ -298,6 +298,10 @@ void process_command(char *cmd);
 
 void shell()
 {
+	// testing...
+	set("root=(hd0,0)");
+	boot();
+
     printf("Press enter to enter GRAB\n");
     kbd_poll_event();
     vga_reset();

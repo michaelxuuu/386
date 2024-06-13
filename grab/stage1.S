@@ -147,8 +147,8 @@ print.2:
 gdt:
 // null
     .word 0, 0, 0, 0
-    GETE(0xfffff, 0, 1)
-    GETE(0xfffff, 0, 0)
+    GDTE(0xfffff, 0, 1)
+    GDTE(0xfffff, 0, 0)
 
 gdt_ptr:
     .word gdt_ptr - gdt - 1
