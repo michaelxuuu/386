@@ -9,11 +9,20 @@
 #include <fs.h>
 #include <fs-api.h>
 
-void start2(int pcimod) __attribute__((section(".text.start2")));
+struct addr_range_desc {
+	uint32_t baselow;
+	uint32_t basehigh;
+	uint32_t lengthlow;
+	uint32_t lengthhigh;
+	uint32_t type;
+	uint32_t acpi3;
+};
+
+void start2(int pcimod, struct addr_range_desc *mem_map, int mapsz) __attribute__((section(".text.start2")));
 
 void shell();
 
-void start2(int pcimod) {
+void start2(int pcimod, struct addr_range_desc *mem_map, int mapsz) {
     printf("probing pci devices...\n");
     pci_prob_dev(0);
     pci_list();
