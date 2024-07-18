@@ -1,5 +1,5 @@
 void kmain()
-{	
-	for (;;);
+{
+        for (;;)
+                ;
 }
-

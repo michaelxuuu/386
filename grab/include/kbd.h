@@ -40,7 +40,8 @@ struct key_event {
         // Set to 1 if the scan code can be mapped to an data code
         // and make is set to 1 (data code is offered at key press not release)
         uint8_t hasdata : 1;
-        // Set to 1 if the ps/2 data is not interrpretable, even as a modifier key
+        // Set to 1 if the ps/2 data is not interrpretable, even as a modifier
+        // key
         uint8_t hasraw : 1;
         // Reserved for future use (some keys aren't imeplemented yet)
         uint8_t unused : 4;
@@ -60,9 +61,9 @@ typedef uint32_t key_event_t;
 
 // Here are the encodings (enumerations) of the keyboard keys.
 // Only the nonprintable keys are encoded while the
-// printable ones are already naturally and conveniently encoded by their 
+// printable ones are already naturally and conveniently encoded by their
 // ascii values. For example, the key "A" is encoded by
-// ascii 'a' (aka 97), and the same for the keys, "=", "\t" (TAB), 
+// ascii 'a' (aka 97), and the same for the keys, "=", "\t" (TAB),
 // and "\b" (BACKSPACE), etc.
 enum nonprintable_keys {
         KEY_UNKNOWN = MAX_ASCII + 1,

@@ -1,0 +1,21 @@
+BasedOnStyle: LLVM
+UseTab: Never
+IndentWidth: 8
+TabWidth: 8
+AllowShortIfStatementsOnASingleLine: true
+AlignConsecutiveMacros: true
+IndentCaseLabels: false
+ColumnLimit: 80
+NamespaceIndentation: All
+FixNamespaceComments: false
+BreakBeforeBraces: Custom
+SortIncludes: false
+IndentPPDirectives: AfterHash
+BraceWrapping:
+        AfterControlStatement: false
+        AfterEnum: false
+        AfterFunction: true
+        AfterStruct: false
+        AfterUnion: false
+        BeforeElse: false
+        IndentBraces: false

@@ -26,7 +26,7 @@
 #define BGND_BRWN  0x60
 #define BGND_LGRAY 0x70 /* Light gray. */
 
-#define BLINK      0x80 /* Annoying. */
+#define BLINK 0x80 /* Annoying. */
 
 void vga_reset();
 uint16_t vga_get_cursor();
